@@ -35,7 +35,7 @@ The main runtime window is `PressureFlowGUI` in `modules/gui_window.py`.
 - `modules/gui_window.py` is currently the main orchestration point for UI, hardware lifecycle, buffering, export, and automation startup.
 - `modules/measurement_session.py` owns live measurement buffers and builds CSV export snapshots.
 - `modules/program_contract.py` defines the shared editor/runner step names and parameter keys.
-- `modules/program_runner.py` executes editor-generated JSON steps and calls back into the GUI and hardware abstractions.
+- `modules/program_runner.py` executes editor-generated JSON steps through narrow runtime methods exposed by the GUI.
 - Editor task metadata is currently shared through `editor/modules/editor/task_globals.py`.
 - Hardware-facing behavior should be changed conservatively and verified on real equipment.
 

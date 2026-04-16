@@ -647,11 +647,125 @@ class PressureFlowGUI(QWidget):
         if not ok:
             QMessageBox.warning(self, "Offset", "Saving the offset failed.")
 
+    def set_target_pressure_mbar(self, value_mbar):
+        """Set the user-facing pressure target and send the offset-corrected setpoint."""
+        value_mbar = float(value_mbar)
+        self.target_pressure = value_mbar
+        self.pressure_source.setDesiredPressure(value_mbar + self.offset)
+        return value_mbar
+
+    def get_target_pressure_mbar(self):
+        """Return the current user-facing pressure target in mbar."""
+        return float(getattr(self, "target_pressure", 0.0))
+
+    def reset_pressure_hardware_zero_mbar(self):
+        """Send a raw 0 mbar hardware setpoint for reset/stop-all paths."""
+        self.pressure_source.setDesiredPressure(0)
+        self.target_pressure = 0.0
+
+    def set_offset_mbar(self, offset_mbar, persist=False, ignore_persist_errors=False):
+        """Update the pressure offset, optionally persisting it to disk."""
+        self.offset = float(offset_mbar)
+        if persist:
+            if ignore_persist_errors:
+                try:
+                    self._persist_offset()
+                except Exception:
+                    pass
+            else:
+                self._persist_offset()
+        return self.offset
+
+    def read_internal_pressure_mbar(self):
+        """Read the internal pressure monitor and convert it to mbar."""
+        raw = self.pressure_source.getRawMonitorValue()
+        if raw is None:
+            return None
+        return self.pressure_source.bitToMbar(raw)
+
+    def get_fluigent_sensor_by_name(self, sensor_name):
+        """Return the Fluigent sensor matching an editor-visible serial name."""
+        for sensor in getattr(self, "fluigent_sensors", []):
+            if f"SN{sensor.device_sn}" == sensor_name:
+                return sensor
+        return None
+
+    def read_fluigent_sensor_value(self, sensor_name):
+        """Read a Fluigent sensor by its editor-visible serial name."""
+        sensor = self.get_fluigent_sensor_by_name(sensor_name)
+        if sensor is None:
+            return None
+        return sensor.read_pressure()
+
+    def zero_fluigent_sensors_by_name(self, selected_sns=None):
+        """Zero selected Fluigent sensors and return successful and failed serial names."""
+        selected_sns = selected_sns or []
+        zeroed = []
+        failed = []
+        for sensor in getattr(self, "fluigent_sensors", []):
+            sensor_tag = f"SN{sensor.device_sn}"
+            if selected_sns and sensor_tag not in selected_sns and str(sensor.device_sn) not in selected_sns:
+                continue
+            try:
+                sensor.set_zero()
+                zeroed.append(sensor_tag)
+            except Exception as exc:
+                failed.append((sensor_tag, exc))
+        return zeroed, failed
+
+    def read_flow_sensor_value(self, sensor_name):
+        """Read a flow sensor by its editor-visible channel name."""
+        for sensor in getattr(self, "flow_sensors", []):
+            if sensor.name == sensor_name:
+                return sensor.read_flow()
+        return None
+
+    def read_program_sensor_value(self, sensor_name):
+        """Read any sensor name used by automation programs."""
+        if sensor_name == "Internal":
+            return self.read_internal_pressure_mbar()
+        if sensor_name.startswith("Flow"):
+            return self.read_flow_sensor_value(sensor_name)
+        if sensor_name.startswith("SN"):
+            return self.read_fluigent_sensor_value(sensor_name)
+        return None
+
+    def set_valve_state_by_index(self, index, state):
+        """Set a valve by hardware-list index without adding UI or log side effects."""
+        valve = self.valves[index]
+        valve.bus.write_coil(valve.address, bool(state))
+        valve.state = int(bool(state))
+        return valve
+
+    def set_valve_state_by_name(self, valve_name, state, available_valves):
+        """Set a valve using the editor-visible valve order."""
+        if valve_name not in available_valves:
+            return False
+        index = available_valves.index(valve_name)
+        self.set_valve_state_by_index(index, state)
+        return True
+
+    def close_all_valves(self):
+        """Close every configured valve without changing pressure."""
+        for index in range(len(self.valves)):
+            self.set_valve_state_by_index(index, False)
+
+    def start_measurement_from_program(self, sampling_interval_ms=None):
+        """Start a measurement from an automation program without user confirmation."""
+        self.start_measurement(automated=True, sampling_interval_ms=sampling_interval_ms)
+
+    def stop_measurement_from_program(self):
+        """Stop a measurement from an automation program without extra UI prompts."""
+        self.stop_measurement(automated=True)
+
+    def export_csv_from_program(self, path):
+        """Run the non-interactive CSV export used by automation programs."""
+        self.do_csv_export(path=path, silent=True)
+
     def set_pressure(self):
         try:
             value = float(self.input_pressure.text())
-            self.target_pressure = value
-            self.pressure_source.setDesiredPressure(value + self.offset)
+            self.set_target_pressure_mbar(value)
         except ValueError:
             QMessageBox.warning(self, "Invalid Input", "Please enter a valid number.")
 
@@ -1137,11 +1251,7 @@ class PressureFlowGUI(QWidget):
 
     def reset_all_to_default(self):
         """Close all valves and reset the pressure setpoint to 0 mbar."""
-        for valve in self.valves:
-            valve.bus.write_coil(valve.address, False)
-            valve.state = 0
-
-        self.pressure_source.setDesiredPressure(0)
-        self.target_pressure = 0
+        self.close_all_valves()
+        self.reset_pressure_hardware_zero_mbar()
         self.append_log("All valves closed, pressure set to 0 mbar.")
         

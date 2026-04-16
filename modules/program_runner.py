@@ -250,24 +250,21 @@ class ProgramRunner:
 
         if type_ == STEP_SET_PRESSURE:
             value = float(params.get(PARAM_PRESSURE, 0.0))
-            self.gui.target_pressure = value
-            self.gui.pressure_source.setDesiredPressure(value + self.gui.offset)
+            self.gui.set_target_pressure_mbar(value)
             self._log(f"Pressure set to {value} mbar")
             return  # End the step cleanly.
 
         elif type_ == STEP_ADD_PRESSURE:
             delta = params.get(PARAM_DELTA_MBAR, 0.0)
             # Use the current target setpoint, not the measured value.
-            current = getattr(self.gui, "target_pressure", 0.0)
+            current = self.gui.get_target_pressure_mbar()
             new_value = float(current) + float(delta)
-            self.gui.target_pressure = new_value
-            self.gui.pressure_source.setDesiredPressure(new_value + self.gui.offset)
+            self.gui.set_target_pressure_mbar(new_value)
             self._log(f"Pressure increased by {delta} mbar -> {new_value} mbar")
             return
 
         elif type_ == STEP_SET_PRESSURE_ZERO:
-            self.gui.target_pressure = 0.0
-            self.gui.pressure_source.setDesiredPressure(self.gui.offset)
+            self.gui.set_target_pressure_mbar(0.0)
             self._log("Set pressure to 0 mbar")
             return
 
@@ -297,7 +294,7 @@ class ProgramRunner:
 
         elif type_ == STEP_START_MEASUREMENT:
             sampling_interval_ms = sampling_interval_ms_from_params(params)
-            self.gui.start_measurement(automated=True, sampling_interval_ms=sampling_interval_ms)
+            self.gui.start_measurement_from_program(sampling_interval_ms=sampling_interval_ms)
             if sampling_interval_ms is not None:
                 self._log(f"Measurement started ({sampling_interval_ms} ms interval)")
             else:
@@ -305,7 +302,7 @@ class ProgramRunner:
             return
 
         elif type_ == STEP_STOP_MEASUREMENT:
-            self.gui.stop_measurement(automated=True)
+            self.gui.stop_measurement_from_program()
             self._log("Measurement stopped")
             return
 
@@ -324,26 +321,22 @@ class ProgramRunner:
         elif type_ == STEP_ZERO_FLUIGENT:
             selected_sns = params.get("sensors", [])
             self._log(f"Zeroing Fluigent sensors: {selected_sns if selected_sns else 'All'}")
-            for sensor in getattr(self.gui, "fluigent_sensors", []):
-                sensor_tag = f"SN{sensor.device_sn}"
-                if selected_sns and sensor_tag not in selected_sns and str(sensor.device_sn) not in selected_sns:
-                    continue
-                try:
-                    sensor.set_zero()
-                    self._log(f"Sensor {sensor_tag} zeroed")
-                except Exception as e:
-                    self._log(f"Failed to zero {sensor_tag}: {e}")
+            zeroed, failed = self.gui.zero_fluigent_sensors_by_name(selected_sns)
+            for sensor_tag in zeroed:
+                self._log(f"Sensor {sensor_tag} zeroed")
+            for sensor_tag, error in failed:
+                self._log(f"Failed to zero {sensor_tag}: {error}")
             return
 
         elif type_ == STEP_CALIBRATE_WITH_FLUIGENT_SENSOR:
             sensor_name = params.get(PARAM_SENSOR, "")
-            sensor = next((s for s in getattr(self.gui, "fluigent_sensors", []) if f"SN{s.device_sn}" == sensor_name), None)
+            sensor = self.gui.get_fluigent_sensor_by_name(sensor_name)
             if sensor is None:
                 self._log(f"Sensor {sensor_name} not found.")
                 return
 
-            raw = self.gui.pressure_source.getRawMonitorValue()
-            if raw is None:
+            internal_pressure = self.gui.read_internal_pressure_mbar()
+            if internal_pressure is None:
                 self._log("Calibration failed: internal pressure readout error.")
                 return
 
@@ -352,13 +345,12 @@ class ProgramRunner:
                 self._log("Calibration failed: sensor readout error.")
                 return
 
-            internal_pressure = self.gui.pressure_source.bitToMbar(raw)
-            self.gui.offset = internal_pressure - ext_pressure
-            try:
-                self.gui._persist_offset()
-            except Exception:
-                pass
-            self._log(f"Offset set to {self.gui.offset:.2f} mbar using {sensor_name}")
+            offset = self.gui.set_offset_mbar(
+                internal_pressure - ext_pressure,
+                persist=True,
+                ignore_persist_errors=True,
+            )
+            self._log(f"Offset set to {offset:.2f} mbar using {sensor_name}")
             return
 
         elif type_ == STEP_LOOP:
@@ -395,8 +387,7 @@ class ProgramRunner:
             if fluidic_valve:
                 self.control_valve(fluidic_valve, True)
 
-            self.gui.target_pressure = input_pressure
-            self.gui.pressure_source.setDesiredPressure(input_pressure + self.gui.offset)
+            self.gui.set_target_pressure_mbar(input_pressure)
             self._log(f"Input pressure set to {input_pressure} mbar")
 
             volume_ul = 0.0
@@ -481,8 +472,7 @@ class ProgramRunner:
             if not self.running:
                 break
             p = p_start + (p_end - p_start) * i / steps
-            self.gui.target_pressure = p
-            self.gui.pressure_source.setDesiredPressure(p + self.gui.offset)
+            self.gui.set_target_pressure_mbar(p)
             time.sleep(0.2)
 
     
@@ -504,7 +494,7 @@ class ProgramRunner:
         Kd = params.get(PARAM_KD, 0.05)
     
         tolerance = target_flow * (tolerance_percent / 100.0)
-        current_pressure = self.gui.target_pressure
+        current_pressure = self.gui.get_target_pressure_mbar()
         self._log(
             f"PID flow control: target {target_flow} uL/min, sensor {sensor_name}, "
             f"tolerance +/-{tolerance:.2f}, stable time {stable_time}s"
@@ -536,8 +526,7 @@ class ProgramRunner:
             adjustment = (Kp * error) + (Ki * integral) + (Kd * derivative)
             current_pressure += adjustment
             current_pressure = max(p_min, min(p_max, current_pressure))
-            self.gui.target_pressure = current_pressure
-            self.gui.pressure_source.setDesiredPressure(current_pressure + self.gui.offset)
+            self.gui.set_target_pressure_mbar(current_pressure)
             # Check stability only when not running in continuous mode.
             if not continuous:
                 if abs(error) <= tolerance:
@@ -559,10 +548,7 @@ class ProgramRunner:
         """
         Return the current value of the selected flow sensor.
         """
-        for sensor in self.gui.flow_sensors:
-            if sensor.name == sensor_name:
-                return sensor.read_flow()
-        return None
+        return self.gui.read_flow_sensor_value(sensor_name)
     
    
     def wait_for_stable_sensor(self, sensor_name, condition, target_value, tolerance, stable_time):
@@ -737,17 +723,7 @@ class ProgramRunner:
         return False
 
     def get_sensor_value(self, sensor_name):
-        if sensor_name == "Internal":
-            raw = self.gui.pressure_source.getRawMonitorValue()
-            if raw is not None:
-                return self.gui.pressure_source.bitToMbar(raw)
-        elif sensor_name.startswith("Flow"):
-            return self.get_flow_value(sensor_name)
-        elif sensor_name.startswith("SN"):
-            sensor = next((s for s in self.gui.fluigent_sensors if f"SN{s.device_sn}" == sensor_name), None)
-            if sensor:
-                return sensor.read_pressure()
-        return None
+        return self.gui.read_program_sensor_value(sensor_name)
      
     def load_sequence(self, params):
         """Load a JSON sequence and inject its steps directly into the running program."""
@@ -784,11 +760,7 @@ class ProgramRunner:
         :param state: True to open the valve, False to close it
         """
         available_valves = get_available_valves()
-        if valve_name in available_valves:
-            idx = available_valves.index(valve_name)
-            valve = self.gui.valves[idx]
-            valve.bus.write_coil(valve.address, state)
-            valve.state = int(state)
+        if self.gui.set_valve_state_by_name(valve_name, state, available_valves):
             self._log(f"Valve {valve_name} set to {'Open' if state else 'Closed'}")
         else:
             self._log(f"Valve {valve_name} not found in available valves: {available_valves}")
@@ -803,14 +775,9 @@ class ProgramRunner:
         self.running = False
         self._log("Program execution manually stopped.")
 
-        # Set all valves to "Closed"
-        for valve in self.gui.valves:
-            valve.bus.write_coil(valve.address, False)
-            valve.state = 0
-
-        # Set pressure to 0 mbar
-        self.gui.pressure_source.setDesiredPressure(0)
-        self.gui.target_pressure = 0
+        # Keep the existing stop-all semantics: close valves and send a raw 0 mbar setpoint.
+        self.gui.close_all_valves()
+        self.gui.reset_pressure_hardware_zero_mbar()
         self._log("All valves closed, pressure set to 0 mbar.")
 
     def export_csv(self, params):
@@ -821,5 +788,5 @@ class ProgramRunner:
             return
 
         path = CSVExporter.generate_filename(prefix=prefix, folder=folder)
-        self.gui.do_csv_export(path=path, silent=True)
+        self.gui.export_csv_from_program(path)
         self._log(f"CSV export saved to:\n{path}")
