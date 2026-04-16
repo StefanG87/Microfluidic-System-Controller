@@ -1,0 +1,23 @@
+{
+  "name": "stand2",
+  "valve_groups": [
+    {
+      "box": "Pneumatic Valves",
+      "items": [
+        {"group": "pneumatic", "coil": 8,  "editor_name": "Pneumatic 1", "button_label": "Valve 1"},
+        {"group": "pneumatic", "coil": 9,  "editor_name": "Pneumatic 2", "button_label": "Valve 2"},
+        {"group": "pneumatic", "coil": 10, "editor_name": "Pneumatic 3", "button_label": "Valve 3"},
+        {"group": "pneumatic", "coil": 11, "editor_name": "Pneumatic 4", "button_label": "Valve 4"}
+      ]
+    },
+    {
+      "box": "Fluidic Valves",
+      "items": [
+        {"group": "fluidic", "coil": 0, "editor_name": "Fluidic 1", "button_label": "Valve 1"},
+        {"group": "fluidic", "coil": 1, "editor_name": "Fluidic 2", "button_label": "Valve 2"},
+        {"group": "fluidic", "coil": 2, "editor_name": "Fluidic 3", "button_label": "Valve 3"},
+        {"group": "fluidic", "coil": 3, "editor_name": "Fluidic 4", "button_label": "Valve 4"}
+      ]
+    }
+  ]
+}

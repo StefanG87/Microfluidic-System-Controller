@@ -1,0 +1,34 @@
+﻿# Python cache and virtual envs
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Build artifacts
+build/
+dist/
+editor/dist/
+*.spec.bak
+
+# Runtime outputs
+Measurements/
+*.log
+
+# Local preferences and machine-specific state
+lookup/device_prefs.json
+lookup/pressure_offset.json
+
+# OS/editor noise
+Thumbs.db
+.DS_Store
+*.tmp
+*.temp
+
+# Optional test and coverage output
+.pytest_cache/
+.coverage
+htmlcov/
+editor/lookup/device_prefs.json
+

@@ -1,0 +1,50 @@
+/Microfluidic System Controller/
+|-- main_gui.py                               # Launches the main GUI controller
+|-- editor_main_embedded.py                   # Launches the integrated editor preview
+|-- README.md                                 # Project overview and local usage notes
+|-- ARCHITECTURE.md                           # Architecture summary and module boundaries
+|-- GUI_PLAN.txt                              # Historical staged GUI plan
+|
+|-- modules/                                  # Runtime GUI, hardware, plotting, export, and runner logic
+|   |-- __init__.py
+|   |-- gui_window.py                         # Main runtime window: PressureFlowGUI
+|   |-- plot_area.py                          # Live Matplotlib plotting widget
+|   |-- pressure_controller.py                # Pressure-source abstraction
+|   |-- valve.py                              # Coil-driven valve abstraction
+|   |-- flow_sensor.py                        # Sensirion flow sensor abstraction
+|   |-- fluigent_wrapper.py                   # Fluigent sensor discovery and access
+|   |-- sampling_manager.py                   # Shared sampling clock and sampling dialog
+|   |-- export_dialog.py                      # CSV export dialog
+|   |-- csv_exporter.py                       # CSV filename and folder helpers
+|   |-- program_runner.py                     # JSON program execution logic
+|   |-- program_worker.py                     # Worker-thread wrapper for the runner
+|   |-- rotary_valve_controller.py            # High-level rotary valve controller
+|   |-- rotary_valve_widget.py                # Rotary valve UI widget and polling
+|   |-- rvm_dt.py                             # Low-level rotary valve protocol helpers
+|   |-- sensor_zero_dialog.py                 # Fluigent zero-selection dialog
+|   |-- mf_common.py                          # Shared helpers for prefs, profiles, and small UI tasks
+|   `-- Fluigent/                             # Bundled Fluigent SDK package
+|
+|-- editor/                                   # Standalone editor package
+|   |-- __init__.py
+|   |-- editor_main.py                        # Standalone editor entry point
+|   |-- README.txt                            # Editor snapshot and maintenance notes
+|   `-- modules/
+|       |-- __init__.py
+|       `-- editor/
+|           |-- __init__.py
+|           |-- editor_joblist.py             # Step list, editing, save, and load
+|           |-- editor_tasklist.py            # Task palette
+|           |-- editor_step.py                # Step data model
+|           |-- editor_tasks.py               # Standard task dialogs
+|           |-- special_tasks.py              # Advanced task dialogs
+|           `-- task_globals.py               # Shared editor device catalogs
+|
+|-- lookup/                                   # Hardware profiles and local preference files
+|-- icons/                                    # Shared application icons
+|-- Measurements/                             # Runtime CSV export output
+|-- OLD/                                      # Read-only reference copy of known-good files
+|-- build/                                    # Generated build artifacts
+|-- dist/                                     # Generated packaged application output
+|-- editor/dist/                              # Generated packaged editor output
+`-- requirements.txt                          # Python dependencies
