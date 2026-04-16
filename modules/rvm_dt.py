@@ -6,13 +6,13 @@
 # - Frame: "/<addr><cmd><CR>" ; reply begins with "/0..." and ends with ETX CR LF
 # - Commands that MUST be executed with trailing 'R': moves (B/I/O...), init (Z/Y), some control
 # - Commands that MUST NOT use 'R': queries starting with '?', configuration starting with '!', and T/X/H/Q
-#   (see “Command Execution Guidelines” and the RVM command set).  [AMF manual]
-# - Status polling: '?9200' → 0 = Done, 255 = Busy, 0x90 = Not homed.  [AMF manual]
+#   (see "Command Execution Guidelines" and the RVM command set).  [AMF manual]
+# - Status polling: '?9200' -> 0 = Done, 255 = Busy, 0x90 = Not homed.  [AMF manual]
 #
 # Robustness:
 # - Uses serial.read_until('\n') with retries (pySerial docs) to tolerate delayed/partial replies.
-# - Treats any reply starting with '/0' as OK (covers '/0@' and text OKs like "!8012" → "/0'12 ports mode").
-# - If a move’s reply is empty, we validate acceptance by checking '?9200' (Busy/Done).
+# - Treats any reply starting with '/0' as OK (covers '/0@' and text OKs like "!8012" -> "/0'12 ports mode").
+# - If a move reply is empty, we validate acceptance by checking '?9200' (Busy/Done).
 #
 # Copyright: you may reuse in your lab; no warranty.
 
@@ -33,7 +33,7 @@ class RVMError(RuntimeError):
 
 @dataclass
 class RVMConfig:
-    """Serial and protocol knobs. Adjust only if you know what you’re doing."""
+    """Serial and protocol knobs. Adjust only if you know what you are doing."""
     address: int = 1              # Device address (1..9/A..E); default is 1
     baudrate: int = 9600          # 9600 8N1 per manual
     timeout_s: float = 2.0        # read timeout
@@ -142,7 +142,7 @@ class RVM:
         self.wait_until_done()
 
     def step_dec(self) -> None:
-        """–1 step (wrap), direction agnostic (uses shortest path)."""
+        """-1 step (wrap), direction agnostic (uses shortest path)."""
         n = self.get_num_ports() or 12
         cur = self.position() or 1
         tgt = (cur - 2) % n + 1
@@ -208,7 +208,7 @@ class RVM:
         if getattr(self.ser, "in_waiting", 0):
             peek = self.ser.read(1)
             if peek != b"\n":
-                # push back not available → just ignore (no functional impact)
+                # Pushback is not available; ignore without functional impact.
                 pass
     
         # Retry on empty/short frames (device or driver may be slightly late)
@@ -231,7 +231,7 @@ class RVM:
 
         if norm.startswith("0"):
             norm = "/" + norm
-        # Sometimes ETX is visible as '\x03' right before CR/LF → keep it
+        # Sometimes ETX is visible as '\x03' right before CR/LF; keep it.
     
         if expect_ok:
             # OK if the normalized reply starts with '/0' (covers '/0@' and text OKs)

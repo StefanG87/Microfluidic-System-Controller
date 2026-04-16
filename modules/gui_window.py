@@ -549,7 +549,7 @@ class PressureFlowGUI(QWidget):
         control_layout.addStretch()
         layout.addLayout(control_layout, 1)
     
-        # === Rechte Seite: Plot + Log ===
+        # === Right side: plot and log ===
         right_layout = QVBoxLayout()
     
         self.plot_area = PlotArea(

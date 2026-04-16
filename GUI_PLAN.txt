@@ -1,78 +1,11 @@
-"Remind me about #MF_GUI_PLAN"
-or
-"We are at step 3 of #MF_GUI_PLAN"
+# Historical GUI Plan
 
-1. Start module: Pressure Source + GUI foundation
+This file is kept only as historical context for the staged GUI build-up that started the project.
 
-    GUI with:
+It is not the current architecture reference. Use these files instead:
 
-        pressure display
+- `README.md` for project overview and local usage.
+- `ARCHITECTURE.md` for module boundaries and automation contract details.
+- `TESTING.md` for manual validation on the lab setup.
 
-        input field for the target value
-
-        buttons: "Set Pressure", "Set to 0 mbar", "Auto-Zero", "Start Measurement", "Stop Measurement"
-
-        live plot with checkboxes (Target, Measured, Corrected)
-
-        CSV export on "Stop"
-
-    Still without valves or sensor detection
-
-    Clean structure:
-
-        main_gui.py
-
-        modules/pressure_controller.py
-
-        modules/gui_window.py
-
-        modules/plot_area.py
-
-2. Valves
-
-    pneumatic and fluidic valves
-
-    toggle buttons
-
-    status display
-
-    plot checkboxes (V1-V8)
-
-3. Sensirion flow sensors
-
-    up to 4 sensors via Modbus
-
-    live plot and checkboxes
-
-    integration into CSV export
-
-4. Fluigent sensors
-
-    pressure sensors via the Fluigent SDK
-
-    optional when the SDK can be loaded
-
-    integration into plot and export
-
-5. Configuration dialog (extra button)
-
-    set sampling interval
-
-    choose export columns
-
-    checkboxes for sensor selection (if dynamic)
-
-Code structure and comment style
-
-Each functional block should be clearly separated in code with comments such as:
-
-# === [BLOCK: Pressure control] ===
-# ... pressure controller, target value, autozero, etc.
-
-Or also:
-
-# === [BLOCK: Valve control] ===
-# ...
-
-If that looks good, start with step 1 now: only the pressure source, GUI foundation, live plot, and export.
-Once that is in place, build the rest step by step on top of it.
+The current implementation has grown beyond the original staged plan and now includes hardware profiles, Fluigent sensors, rotary-valve support, measurement sessions, CSV export, and JSON automation programs.

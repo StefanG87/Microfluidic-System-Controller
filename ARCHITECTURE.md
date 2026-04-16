@@ -1,105 +1,122 @@
 # Architecture Overview
 
-## Program summary
+## Program Summary
 
-The application is a laboratory control and monitoring GUI for a microfluidic measurement setup. It combines live hardware control, sensor acquisition, plotting, CSV export, and program execution inside one PyQt5 desktop application.
+The Microfluidic System Controller is a PyQt5 desktop application for controlling and monitoring a laboratory microfluidic measurement setup. It combines pressure control, valve switching, flow and pressure sensor readout, live plotting, CSV export, and JSON-defined automation programs.
 
-## Runtime flow
+The main runtime window is `PressureFlowGUI` in `modules/gui_window.py`. The program editor can run embedded from the main GUI or standalone through `editor/editor_main.py`.
 
-1. `main_gui.py` starts `PressureFlowGUI`.
-2. `PressureFlowGUI` connects to Modbus hardware, builds valve objects from the selected hardware profile, detects sensors, and starts a periodic Qt timer.
-3. The timer calls `update_data()`, which samples hardware values, updates internal buffers, refreshes labels, and triggers plot updates.
-4. Measurement buffers are exported through `ExportDialog` and `CSVExporter`.
-5. Automation programs are loaded from JSON, executed by `ProgramRunner`, and hosted in a worker thread through `ProgramWorker`.
+## Runtime Flow
 
-## Main modules
+1. `main_gui.py` bootstraps import paths for the project and bundled Fluigent SDK, creates the Qt application, and opens `PressureFlowGUI`.
+2. `PressureFlowGUI` connects to the Modbus pressure/valve hardware, loads the selected hardware profile, builds valve objects, detects configured sensors, and creates the plot/export/program-runner components.
+3. A Qt timer calls `update_data()`, which reads the current pressure, valves, flow sensors, Fluigent pressure sensors, and rotary-valve state into the shared measurement session.
+4. `PlotArea` renders live pressure, flow, valve, Fluigent, and rotary activity data from the buffers.
+5. `ExportDialog` and `CSVExporter` write snapshots of the current measurement session to CSV files.
+6. Automation programs are loaded from JSON by `ProgramRunner` and executed in a worker thread through `ProgramWorker`.
 
-### GUI and orchestration
+## Main Modules
 
-- `modules/gui_window.py`: main controller window and runtime coordinator
-- `modules/plot_area.py`: live Matplotlib plot widget
-- `modules/measurement_session.py`: measurement-buffer owner and `ExportSnapshot` provider for plotting/CSV data
-- `modules/sampling_manager.py`: shared time base and sampling dialog
-- `modules/export_dialog.py`: CSV export UI
-- `modules/csv_exporter.py`: filename and export folder helpers
+### GUI And Orchestration
 
-### Hardware interfaces
+- `modules/gui_window.py`: main controller window, hardware lifecycle, runtime state, GUI callbacks, and automation bridge methods.
+- `modules/measurement_session.py`: owner for live measurement buffers and export snapshots.
+- `modules/plot_area.py`: Matplotlib-based live plot widget.
+- `modules/sampling_manager.py`: shared time base and sampling interval dialog.
+- `modules/export_dialog.py`: manual and programmatic CSV writer UI.
+- `modules/csv_exporter.py`: default export folder and timestamped filename helpers.
 
-- `modules/pressure_controller.py`: pressure controller abstraction
-- `modules/valve.py`: coil-based valve abstraction
-- `modules/flow_sensor.py`: analog flow sensor conversion and readout
-- `modules/fluigent_wrapper.py`: Fluigent sensor discovery and access
-- `modules/rotary_valve_controller.py`: rotary valve communication wrapper
-- `modules/rotary_valve_widget.py`: rotary valve GUI and polling
-- `modules/rvm_dt.py`: low-level rotary valve protocol helpers
-- `modules/mf_common.py`: shared persistence, small UI helpers, and hardware profile loading
+### Hardware Interfaces
 
-### Automation and editor
+- `modules/pressure_controller.py`: pressure-controller abstraction on top of Modbus registers.
+- `modules/valve.py`: coil-driven valve abstraction.
+- `modules/flow_sensor.py`: analog flow sensor conversion and readout.
+- `modules/fluigent_wrapper.py`: Fluigent SDK loading, sensor detection, readout, and software zeroing.
+- `modules/rotary_valve_controller.py`: high-level rotary valve controller.
+- `modules/rotary_valve_widget.py`: rotary valve GUI, polling, and program-runner helper methods.
+- `modules/rvm_dt.py`: low-level AMF RVM DT serial protocol helper.
+- `modules/mf_common.py`: shared preferences, hardware profile loading, small UI helpers, and persistence helpers.
 
-- `modules/program_runner.py`: executes JSON program steps against the active GUI/hardware state
-- `modules/program_worker.py`: worker-thread wrapper for program execution
-- `editor/modules/editor/editor_tasklist.py`: task palette
-- `editor/modules/editor/editor_joblist.py`: step list, editing, save/load
-- `editor/modules/editor/editor_tasks.py`: standard task parameter dialogs
-- `editor/modules/editor/special_tasks.py`: advanced task parameter dialogs
-- `editor/modules/editor/editor_step.py`: step data model
-- `editor/modules/editor/task_globals.py`: shared editor device catalogs
-- `editor_main_embedded.py`: integrated editor host
-- `editor/editor_main.py`: standalone editor host
+### Automation And Editor
 
-## Editor and runner contract
+- `modules/program_contract.py`: shared JSON step names and parameter keys used by both editor and runner.
+- `modules/program_runner.py`: executes editor-generated JSON steps against the active GUI/hardware runtime.
+- `modules/program_worker.py`: Qt worker wrapper around `ProgramRunner`.
+- `modules/polynomial_pressure.py`: shared pressure-profile helpers for advanced pressure steps and editor previews.
+- `editor/modules/editor/editor_tasklist.py`: task palette.
+- `editor/modules/editor/editor_joblist.py`: editable program step list, save/load, undo/redo, and display formatting.
+- `editor/modules/editor/editor_tasks.py`: standard task parameter dialogs.
+- `editor/modules/editor/special_tasks.py`: advanced task dialogs, including pressure ramps, PolynomialPressure, flow control, sequence loading, and Fluigent calibration.
+- `editor/modules/editor/editor_step.py`: editor step model.
+- `editor/modules/editor/task_globals.py`: shared device catalog for editor dialogs.
 
-The editor serializes step dictionaries into JSON, and `ProgramRunner` consumes those dictionaries directly. The current parameter contract is:
+## Editor And Runner Contract
 
-- `Set Pressure`: `pressure` in mbar
-- `Add Pressure`: `delta_mbar` in mbar
-- `Set Pressure to 0`: no parameters
-- `Valve`: `valve_name`, `status` (`Open` or `Close`)
-- `Wait`: `time_sec`
-- `Wait for Sensor Event`: `sensor`, `condition`, `target_value`, `tolerance`, `stable_time`
-- `Start Measurement`: `sampling_interval_ms` in milliseconds inside the step JSON; legacy `sampling_rate` values are still read as Hz and converted for old programs
-- `Stop Measurement`: no parameters
-- `Export CSV`: `filename_prefix`, `folder`
-- `Pressure Ramp`: `start_pressure`, `end_pressure`, `duration`
-- `PolynomialPressure`: `mode`, `order`, `coefficients`, `duration`, `clamp_min`, `clamp_max`, `slew_limit`, `sample_interval`
-- `Flow Controller`: `sensor`, `target_flow`, `max_pressure`, `min_pressure`, `tolerance_percent`, `stable_time`, `continuous`, optional PID gains
-- `ZeroFluigent`: `sensors`, where an empty list means all detected Fluigent sensors
-- `Calibrate With Fluigent Sensor`: `sensor`
-- `Loop`: `start_step`, `end_step`, `repetitions`
-- `Load Sequence`: `filename`, `path`
-- `Dose Volume`: `flow_sensor`, `pneumatic_valve`, `fluidic_valve`, `target_volume`, `input_pressure`
-- `Rotary Valve`: `action`, optional `port`, optional `wait`
+The editor serializes program steps as JSON dictionaries. `ProgramRunner` consumes the same dictionaries directly. Persisted step names and common parameter keys live in `modules/program_contract.py`.
 
-This contract is centralized in `modules/program_contract.py`. The module defines the persisted step names, parameter keys, and the legacy sampling-rate conversion used by both editor and runner code.
+Current step contract:
 
-## Current boundaries and coupling
+- `Set Pressure`: `pressure` in mbar.
+- `Set Pressure to 0`: no parameters.
+- `Add Pressure`: `delta_mbar` in mbar.
+- `Valve`: `valve_name`, `status` (`Open` or `Close`). Legacy `valve_number` is still mapped for old programs.
+- `Wait`: `time_sec`.
+- `Wait for Sensor Event`: `sensor`, `condition`, `target_value`, `tolerance`, `stable_time`.
+- `Start Measurement`: `sampling_interval_ms`; legacy `sampling_rate` is still read as Hz and converted for old programs.
+- `Stop Measurement`: no parameters.
+- `Export CSV`: `filename_prefix`, optional `folder`.
+- `Pressure Ramp`: `start_pressure`, `end_pressure`, `duration`.
+- `PolynomialPressure`: `mode`, `order`, `coefficients`, `duration`, `clamp_min`, `clamp_max`, `slew_limit`, `sample_interval`, optional `sensor`, `feedback_gain`, `max_correction`, and sine parameters `offset_mbar`, `amplitude_mbar`, `period_s`, `phase_deg`.
+- `Flow Controller`: `sensor`, `target_flow`, `max_pressure`, `min_pressure`, `tolerance_percent`, `stable_time`, `continuous`, optional PID gains `Kp`, `Ki`, `Kd`.
+- `ZeroFluigent`: `sensors`; an empty list means all detected Fluigent sensors.
+- `Calibrate With Fluigent Sensor`: `sensor`.
+- `Loop`: `start_step`, `end_step`, `repetitions`.
+- `Load Sequence`: `filename`, `path`.
+- `Dose Volume`: `flow_sensor`, `pneumatic_valve`, `fluidic_valve`, `target_volume`, `input_pressure`.
+- `Rotary Valve`: `action`, optional `port`, optional `wait`.
 
-### Strong couplings that exist today
+## Current Boundaries
 
-- `PressureFlowGUI` owns UI state, device state, plotting coordination, export orchestration, and program bootstrapping; measurement buffers and export snapshots are now grouped in `MeasurementSession`.
-- `PressureFlowGUI` exposes narrow runtime methods for automation pressure control, sensor reads, valve writes, measurement start/stop, CSV export, and rotary-valve program actions.
-- `ProgramRunner` uses those runtime methods for hardware-facing actions and now only keeps step dispatch, flow-control loops, and program-specific control flow.
-- Editor availability data is published globally through `task_globals.py`.
-- Resource and import resolution still depend partly on startup-time path bootstrapping.
+The application is intentionally still a pragmatic lab GUI, not a fully layered service architecture. The current design keeps hardware-facing behavior conservative while moving high-value responsibilities into smaller helper modules.
 
-### Why that matters
+Important boundaries now in place:
 
-These couplings are workable for the current application but make behavior harder to reason about, especially around hidden failures, path handling, and task/runtime parameter consistency.
+- Measurement buffers are grouped in `MeasurementSession` instead of being owned only as loose GUI lists.
+- Program step names and parameter keys are centralized in `program_contract.py`.
+- Pressure-profile math and preview data are centralized in `polynomial_pressure.py`.
+- Program execution is hosted by `ProgramWorker`, with stale worker-thread references cleaned up after execution.
+- Rotary-valve program actions go through narrow GUI helper methods so `ProgramRunner` does not manipulate the widget thread internals directly.
+- CSV export path generation is centralized in `CSVExporter`.
 
-## Confirmed cleanup already worth preserving
+Strong couplings that still exist:
 
-- Sampling dialog imports were repaired.
-- Plot reset now has an explicit interface instead of relying on a swallowed missing-method error.
-- Editor sensor-event display now uses `target_value` consistently.
-- Embedded editor device publication now goes through one central task-global update path.
-- Runner CSV export uses one central filename helper.
-- Program-runner smoke test programs are available in `test_programs/`.
+- `PressureFlowGUI` still owns UI widgets, hardware objects, runtime state, plotting coordination, export orchestration, and program bootstrapping.
+- Editor device availability is still published through mutable module-level state in `task_globals.py`.
+- Import/resource setup still partly depends on startup-time path bootstrapping for local execution and bundled SDK compatibility.
+- Some hardware error paths are intentionally broad to keep the lab GUI alive, but they can hide root causes if logs are not inspected.
 
-## Recommended next refactor direction
+## Hardware Safety Notes
 
-1. Keep `PressureFlowGUI` as the main window, but move narrow responsibilities into helpers rather than rewriting the app.
-2. Align editor task parameters with runtime execution semantics.
-3. Centralize project-root/resource helpers and reduce `sys.path` manipulation.
-4. Fix the programmatic `Stop Measurement` path so it does not open the manual export dialog.
-5. Replace broad exception swallowing in the highest-value paths first.
-6. Add a few hardware-free smoke tests for editor serialization and runner step dispatch.
+- Hardware-facing behavior should be changed conservatively and verified on the real setup.
+- Pressure-setting helpers should preserve the distinction between user-facing target pressure and hardware command including offset compensation.
+- Programmatic stop must not silently reset hardware unless the explicit stop-all path is used.
+- Closed-loop pressure profiles should remain bounded by clamp, slew-rate, and correction limits.
+- Thread cleanup is important: Qt object attributes should not shadow Qt methods such as `thread()`.
+
+## Documentation Sources
+
+The authoritative documentation is:
+
+- `README.md` for project overview, setup, and workflow.
+- `ARCHITECTURE.md` for module boundaries and program-contract details.
+- `TESTING.md` for manual validation on the lab setup.
+
+Historical notes are kept for context only and should not be treated as current architecture.
+
+## Recommended Next Refactor Direction
+
+1. Keep `PressureFlowGUI` as the main window, but move narrow responsibilities into helpers only when that reduces risk.
+2. Keep `program_contract.py` and `polynomial_pressure.py` as the source of truth when new automation parameters are added.
+3. Reduce broad exception swallowing in high-value paths where clearer logging can preserve stability without hiding root causes.
+4. Centralize project-root and resource helpers further if PyInstaller packaging becomes active again.
+5. Consider a small hardware-free runner check only if automation features continue to grow beyond manual validation.
