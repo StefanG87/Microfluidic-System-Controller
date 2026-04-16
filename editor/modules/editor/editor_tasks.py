@@ -3,6 +3,53 @@
 from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 
 from modules.mf_common import select_item
+from modules.program_contract import (
+    CONDITION_STABLE,
+    PARAM_ACTION,
+    PARAM_CONDITION,
+    PARAM_DELTA_MBAR,
+    PARAM_END_STEP,
+    PARAM_FILENAME_PREFIX,
+    PARAM_FLOW_SENSOR,
+    PARAM_FLUIDIC_VALVE,
+    PARAM_FOLDER,
+    PARAM_INPUT_PRESSURE,
+    PARAM_PNEUMATIC_VALVE,
+    PARAM_PORT,
+    PARAM_PRESSURE,
+    PARAM_REPETITIONS,
+    PARAM_SAMPLING_INTERVAL_MS,
+    PARAM_SENSOR,
+    PARAM_SENSORS,
+    PARAM_STABLE_TIME,
+    PARAM_START_STEP,
+    PARAM_STATUS,
+    PARAM_TARGET_VALUE,
+    PARAM_TARGET_VOLUME,
+    PARAM_TIME_SEC,
+    PARAM_TOLERANCE,
+    PARAM_VALVE_NAME,
+    PARAM_WAIT,
+    ROTARY_ACTION_GOTO,
+    ROTARY_ACTION_HOME,
+    ROTARY_ACTION_NEXT,
+    ROTARY_ACTION_PREV,
+    STANDARD_STEP_NAMES,
+    STATUS_CLOSE,
+    STATUS_OPEN,
+    STEP_ADD_PRESSURE,
+    STEP_DOSE_VOLUME,
+    STEP_EXPORT_CSV,
+    STEP_LOOP,
+    STEP_ROTARY_VALVE,
+    STEP_SET_PRESSURE,
+    STEP_START_MEASUREMENT,
+    STEP_VALVE,
+    STEP_WAIT,
+    STEP_WAIT_FOR_SENSOR_EVENT,
+    STEP_ZERO_FLUIGENT,
+    sampling_interval_ms_from_params,
+)
 
 from .task_globals import get_available_sensors, get_available_valves
 
@@ -13,55 +60,42 @@ class EditorTasks:
     @staticmethod
     def get_all_task_names():
         """Return the standard task names offered by the editor."""
-        return [
-            "Set Pressure",
-            "Set Pressure to 0",
-            "Add Pressure",
-            "Valve",
-            "Wait",
-            "Wait for Sensor Event",
-            "Start Measurement",
-            "Export CSV",
-            "ZeroFluigent",
-            "Loop",
-            "Dose Volume",
-            "Rotary Valve",
-        ]
+        return list(STANDARD_STEP_NAMES)
 
     @staticmethod
     def edit_task_params(parent, step):
         """Open the matching editor dialog for a standard task."""
-        if step.type == "Set Pressure":
+        if step.type == STEP_SET_PRESSURE:
             EditorTasks.edit_set_pressure(parent, step)
-        elif step.type == "Add Pressure":
+        elif step.type == STEP_ADD_PRESSURE:
             EditorTasks.edit_add_pressure(parent, step)
-        elif step.type == "Valve":
+        elif step.type == STEP_VALVE:
             EditorTasks.edit_valve(parent, step)
-        elif step.type == "Wait":
+        elif step.type == STEP_WAIT:
             EditorTasks.edit_wait(parent, step)
-        elif step.type == "Wait for Sensor Event":
+        elif step.type == STEP_WAIT_FOR_SENSOR_EVENT:
             EditorTasks.edit_sensor_event(parent, step)
-        elif step.type == "Start Measurement":
+        elif step.type == STEP_START_MEASUREMENT:
             EditorTasks.edit_start_measurement(parent, step)
-        elif step.type == "Export CSV":
+        elif step.type == STEP_EXPORT_CSV:
             EditorTasks.edit_export_csv(parent, step)
-        elif step.type == "Loop":
+        elif step.type == STEP_LOOP:
             EditorTasks.edit_loop_task(parent, step)
-        elif step.type == "Dose Volume":
+        elif step.type == STEP_DOSE_VOLUME:
             EditorTasks.edit_dose_volume(parent, step)
-        elif step.type == "ZeroFluigent":
+        elif step.type == STEP_ZERO_FLUIGENT:
             EditorTasks.edit_zero_fluigent(parent, step)
-        elif step.type == "Rotary Valve":
+        elif step.type == STEP_ROTARY_VALVE:
             EditorTasks.edit_rotary_valve(parent, step)
 
     @staticmethod
     def edit_set_pressure(parent, step):
         """Edit the target pressure for a set-pressure step."""
         pressure, ok = QInputDialog.getDouble(
-            parent, "Set Pressure", "Pressure [mbar]:", step.params.get("pressure", 100.0)
+            parent, "Set Pressure", "Pressure [mbar]:", step.params.get(PARAM_PRESSURE, 100.0)
         )
         if ok:
-            step.params = {"pressure": pressure}
+            step.params = {PARAM_PRESSURE: pressure}
 
     @staticmethod
     def edit_valve(parent, step):
@@ -71,20 +105,20 @@ class EditorTasks:
         if not valve_name:
             return
 
-        status = select_item(parent, "Valve Status", "Status:", ["Open", "Close"])
+        status = select_item(parent, "Valve Status", "Status:", [STATUS_OPEN, STATUS_CLOSE])
         if not status:
             return
 
-        step.params = {"valve_name": valve_name, "status": status}
+        step.params = {PARAM_VALVE_NAME: valve_name, PARAM_STATUS: status}
 
     @staticmethod
     def edit_wait(parent, step):
         """Edit the wait duration in seconds."""
         time_sec, ok = QInputDialog.getDouble(
-            parent, "Wait Time", "Time [s]:", step.params.get("time_sec", 5.0)
+            parent, "Wait Time", "Time [s]:", step.params.get(PARAM_TIME_SEC, 5.0)
         )
         if ok:
-            step.params = {"time_sec": time_sec}
+            step.params = {PARAM_TIME_SEC: time_sec}
 
     @staticmethod
     def edit_sensor_event(parent, step):
@@ -106,7 +140,7 @@ class EditorTasks:
         if not ok:
             return
 
-        valid_conditions = [">", "<", "=", "Stable"]
+        valid_conditions = [">", "<", "=", CONDITION_STABLE]
         current_cond = step.params.get("condition", valid_conditions[0])
         condition, ok = QInputDialog.getItem(
             parent,
@@ -119,22 +153,22 @@ class EditorTasks:
         if not ok:
             return
 
-        target_value = float(step.params.get("target_value", 0.0))
-        if condition != "Stable":
+        target_value = float(step.params.get(PARAM_TARGET_VALUE, 0.0))
+        if condition != CONDITION_STABLE:
             target_value, ok = QInputDialog.getDouble(
                 parent, "Target Value", "Target value:", target_value
             )
             if not ok:
                 return
 
-        tolerance = float(step.params.get("tolerance", 1.0))
+        tolerance = float(step.params.get(PARAM_TOLERANCE, 1.0))
         tolerance, ok = QInputDialog.getDouble(
             parent, "Tolerance (+/-)", "Tolerance value:", tolerance
         )
         if not ok:
             return
 
-        stable_time = float(step.params.get("stable_time", 5.0))
+        stable_time = float(step.params.get(PARAM_STABLE_TIME, 5.0))
         stable_time, ok = QInputDialog.getDouble(
             parent, "Stability Time (s)", "Time for stability:", stable_time
         )
@@ -142,27 +176,29 @@ class EditorTasks:
             return
 
         step.params = {
-            "sensor": sensor,
-            "condition": condition,
-            "target_value": target_value,
-            "tolerance": tolerance,
-            "stable_time": stable_time,
+            PARAM_SENSOR: sensor,
+            PARAM_CONDITION: condition,
+            PARAM_TARGET_VALUE: target_value,
+            PARAM_TOLERANCE: tolerance,
+            PARAM_STABLE_TIME: stable_time,
         }
 
     @staticmethod
     def edit_start_measurement(parent, step):
-        """Edit the requested measurement sampling rate in hertz."""
-        sampling_rate, ok = QInputDialog.getDouble(
-            parent, "Sampling Rate", "Rate [Hz]:", step.params.get("sampling_rate", 10)
+        """Edit the measurement sampling interval in milliseconds."""
+        interval_ms = sampling_interval_ms_from_params(step.params, default=250)
+
+        interval_ms, ok = QInputDialog.getInt(
+            parent, "Sampling Interval", "Interval [ms]:", interval_ms, 1
         )
         if ok:
-            step.params = {"sampling_rate": sampling_rate}
+            step.params = {PARAM_SAMPLING_INTERVAL_MS: interval_ms}
 
     @staticmethod
     def edit_export_csv(parent, step):
         """Choose the export filename prefix and destination folder."""
         filename_prefix, ok = QInputDialog.getText(
-            parent, "Filename Prefix", "Prefix:", text=step.params.get("filename_prefix", "Measurement")
+            parent, "Filename Prefix", "Prefix:", text=step.params.get(PARAM_FILENAME_PREFIX, "Measurement")
         )
         if not ok:
             return
@@ -172,21 +208,21 @@ class EditorTasks:
             return
 
         step.params = {
-            "filename_prefix": filename_prefix,
-            "folder": folder,
+            PARAM_FILENAME_PREFIX: filename_prefix,
+            PARAM_FOLDER: folder,
         }
 
     @staticmethod
     def edit_loop_task(parent, step):
         """Edit the start step, end step, and repetition count for a loop."""
         start_step, ok = QInputDialog.getInt(
-            parent, "Start Step", "Enter start step number:", step.params.get("start_step", 1)
+            parent, "Start Step", "Enter start step number:", step.params.get(PARAM_START_STEP, 1)
         )
         if not ok:
             return
 
         end_step, ok = QInputDialog.getInt(
-            parent, "End Step", "Enter end step number:", step.params.get("end_step", start_step)
+            parent, "End Step", "Enter end step number:", step.params.get(PARAM_END_STEP, start_step)
         )
         if not ok:
             return
@@ -196,7 +232,7 @@ class EditorTasks:
             return
 
         repetitions, ok = QInputDialog.getInt(
-            parent, "Repetitions", "Number of times to repeat:", step.params.get("repetitions", 3)
+            parent, "Repetitions", "Number of times to repeat:", step.params.get(PARAM_REPETITIONS, 3)
         )
         if not ok:
             return
@@ -206,9 +242,9 @@ class EditorTasks:
             return
 
         step.params = {
-            "start_step": start_step,
-            "end_step": end_step,
-            "repetitions": repetitions,
+            PARAM_START_STEP: start_step,
+            PARAM_END_STEP: end_step,
+            PARAM_REPETITIONS: repetitions,
         }
 
     @staticmethod
@@ -236,7 +272,7 @@ class EditorTasks:
             parent,
             "Target Volume",
             "Volume to dose [uL]:",
-            step.params.get("target_volume", 100.0),
+            step.params.get(PARAM_TARGET_VOLUME, 100.0),
             0.1,
             100000.0,
             1,
@@ -248,7 +284,7 @@ class EditorTasks:
             parent,
             "Input Pressure",
             "Dosing pressure [mbar]:",
-            step.params.get("input_pressure", 200.0),
+            step.params.get(PARAM_INPUT_PRESSURE, 200.0),
             0.0,
             1000.0,
             1,
@@ -257,11 +293,11 @@ class EditorTasks:
             return
 
         step.params = {
-            "flow_sensor": flow_sensor,
-            "pneumatic_valve": pneumatic_valve,
-            "fluidic_valve": fluidic_valve,
-            "target_volume": target_volume,
-            "input_pressure": input_pressure,
+            PARAM_FLOW_SENSOR: flow_sensor,
+            PARAM_PNEUMATIC_VALVE: pneumatic_valve,
+            PARAM_FLUIDIC_VALVE: fluidic_valve,
+            PARAM_TARGET_VOLUME: target_volume,
+            PARAM_INPUT_PRESSURE: input_pressure,
         }
 
     @staticmethod
@@ -277,48 +313,48 @@ class EditorTasks:
             return
 
         if selected == "All":
-            step.params = {"sensors": []}
+            step.params = {PARAM_SENSORS: []}
         else:
-            step.params = {"sensors": [selected]}
+            step.params = {PARAM_SENSORS: [selected]}
 
     @staticmethod
     def edit_rotary_valve(parent, step):
         """Configure the action, target port, and wait behavior for a rotary valve step."""
         action, ok = QInputDialog.getItem(
-            parent, "Rotary Valve Action", "Action:", ["goto", "home", "prev", "next"], 0, False
+            parent, "Rotary Valve Action", "Action:", [ROTARY_ACTION_GOTO, ROTARY_ACTION_HOME, ROTARY_ACTION_PREV, ROTARY_ACTION_NEXT], 0, False
         )
         if not ok:
             return
 
-        params = {"action": action}
+        params = {PARAM_ACTION: action}
         wait_default = True
 
-        if action == "goto":
+        if action == ROTARY_ACTION_GOTO:
             port, ok = QInputDialog.getInt(
                 parent,
                 "Goto Port",
                 "Port (1..12):",
-                step.params.get("port", 1),
+                step.params.get(PARAM_PORT, 1),
                 1,
                 12,
                 1,
             )
             if not ok:
                 return
-            params["port"] = port
+            params[PARAM_PORT] = port
 
         wait_str, ok = QInputDialog.getItem(
             parent,
             "Wait for completion?",
             "Wait:",
             ["True", "False"],
-            0 if step.params.get("wait", wait_default) else 1,
+            0 if step.params.get(PARAM_WAIT, wait_default) else 1,
             False,
         )
         if not ok:
             return
 
-        params["wait"] = (wait_str == "True")
+        params[PARAM_WAIT] = (wait_str == "True")
         step.params = params
 
     @staticmethod
@@ -328,7 +364,7 @@ class EditorTasks:
             parent,
             "Add Pressure",
             "Delta Pressure [mbar]:",
-            step.params.get("delta_mbar", 10.0),
+            step.params.get(PARAM_DELTA_MBAR, 10.0),
         )
         if ok:
-            step.params = {"delta_mbar": delta}
+            step.params = {PARAM_DELTA_MBAR: delta}

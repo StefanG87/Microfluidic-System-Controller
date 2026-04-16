@@ -3,6 +3,67 @@ import json
 import time
 
 from editor.modules.editor.task_globals import get_available_valves
+from modules.program_contract import (
+    PARAM_ACTION,
+    PARAM_CONDITION,
+    PARAM_CONTINUOUS,
+    PARAM_DELTA_MBAR,
+    PARAM_DURATION,
+    PARAM_END_PRESSURE,
+    PARAM_END_STEP,
+    PARAM_FILENAME,
+    PARAM_FILENAME_PREFIX,
+    PARAM_FLOW_SENSOR,
+    PARAM_FLUIDIC_VALVE,
+    PARAM_FOLDER,
+    PARAM_INPUT_PRESSURE,
+    PARAM_KD,
+    PARAM_KI,
+    PARAM_KP,
+    PARAM_MAX_PRESSURE,
+    PARAM_MIN_PRESSURE,
+    PARAM_PATH,
+    PARAM_PNEUMATIC_VALVE,
+    PARAM_PORT,
+    PARAM_PRESSURE,
+    PARAM_REPETITIONS,
+    PARAM_SENSOR,
+    PARAM_STABLE_TIME,
+    PARAM_START_PRESSURE,
+    PARAM_START_STEP,
+    PARAM_STATUS,
+    PARAM_TARGET_FLOW,
+    PARAM_TARGET_VALUE,
+    PARAM_TARGET_VOLUME,
+    PARAM_TIME_SEC,
+    PARAM_TOLERANCE,
+    PARAM_TOLERANCE_PERCENT,
+    PARAM_VALVE_NAME,
+    PARAM_WAIT,
+    ROTARY_ACTION_GOTO,
+    ROTARY_ACTION_HOME,
+    ROTARY_ACTION_NEXT,
+    ROTARY_ACTION_PREV,
+    STATUS_OPEN,
+    STEP_ADD_PRESSURE,
+    STEP_CALIBRATE_WITH_FLUIGENT_SENSOR,
+    STEP_DOSE_VOLUME,
+    STEP_EXPORT_CSV,
+    STEP_FLOW_CONTROLLER,
+    STEP_LOAD_SEQUENCE,
+    STEP_LOOP,
+    STEP_PRESSURE_RAMP,
+    STEP_ROTARY_VALVE,
+    STEP_SET_PRESSURE,
+    STEP_SET_PRESSURE_ZERO,
+    STEP_START_MEASUREMENT,
+    STEP_STOP_MEASUREMENT,
+    STEP_VALVE,
+    STEP_WAIT,
+    STEP_WAIT_FOR_SENSOR_EVENT,
+    STEP_ZERO_FLUIGENT,
+    sampling_interval_ms_from_params,
+)
 from modules.csv_exporter import CSVExporter
 from modules.mf_common import load_last_comport, save_last_comport
 
@@ -187,15 +248,15 @@ class ProgramRunner:
         type_ = step.get("type", "")
         params = step.get("params", {}) or {}
 
-        if type_ == "Set Pressure":
-            value = float(params.get("pressure", 0.0))
+        if type_ == STEP_SET_PRESSURE:
+            value = float(params.get(PARAM_PRESSURE, 0.0))
             self.gui.target_pressure = value
             self.gui.pressure_source.setDesiredPressure(value + self.gui.offset)
             self._log(f"Pressure set to {value} mbar")
             return  # End the step cleanly.
 
-        elif type_ == "Add Pressure":
-            delta = params.get("delta_mbar", 0.0)
+        elif type_ == STEP_ADD_PRESSURE:
+            delta = params.get(PARAM_DELTA_MBAR, 0.0)
             # Use the current target setpoint, not the measured value.
             current = getattr(self.gui, "target_pressure", 0.0)
             new_value = float(current) + float(delta)
@@ -204,63 +265,63 @@ class ProgramRunner:
             self._log(f"Pressure increased by {delta} mbar -> {new_value} mbar")
             return
 
-        elif type_ == "Set Pressure to 0":
+        elif type_ == STEP_SET_PRESSURE_ZERO:
             self.gui.target_pressure = 0.0
             self.gui.pressure_source.setDesiredPressure(self.gui.offset)
             self._log("Set pressure to 0 mbar")
             return
 
-        elif type_ == "Valve":
-            valve_name = params.get("valve_name", "")
-            status = params.get("status", "Open")
-            state = str(status).lower() == "open"
+        elif type_ == STEP_VALVE:
+            valve_name = params.get(PARAM_VALVE_NAME, "")
+            status = params.get(PARAM_STATUS, "Open")
+            state = str(status).lower() == STATUS_OPEN.lower()
             self.control_valve(valve_name, state)
             self._log(f"Valve {valve_name} set to {status}")
             return
 
-        elif type_ == "Wait":
-            seconds = float(params.get("time_sec", 1.0))
+        elif type_ == STEP_WAIT:
+            seconds = float(params.get(PARAM_TIME_SEC, 1.0))
             self._log(f"Waiting for {seconds} seconds")
             time.sleep(seconds)
             return
 
-        elif type_ == "Wait for Sensor Event":
-            sensor_name = params.get("sensor")
-            condition = params.get("condition")
-            target_value = params.get("target_value", 0.0)
-            tolerance = params.get("tolerance", 0.0)
-            stable_time = params.get("stable_time", 0.0)
+        elif type_ == STEP_WAIT_FOR_SENSOR_EVENT:
+            sensor_name = params.get(PARAM_SENSOR)
+            condition = params.get(PARAM_CONDITION)
+            target_value = params.get(PARAM_TARGET_VALUE, 0.0)
+            tolerance = params.get(PARAM_TOLERANCE, 0.0)
+            stable_time = params.get(PARAM_STABLE_TIME, 0.0)
             self._log(f"Waiting for sensor: {sensor_name} ({condition} {target_value} +/-{tolerance} for {stable_time}s)")
             self.wait_for_stable_sensor(sensor_name, condition, target_value, tolerance, stable_time)
             return
 
-        elif type_ == "Start Measurement":
-            sampling_rate_hz = params.get("sampling_rate")
-            self.gui.start_measurement(automated=True, sampling_rate_hz=sampling_rate_hz)
-            if sampling_rate_hz is not None:
-                self._log(f"Measurement started ({sampling_rate_hz} Hz)")
+        elif type_ == STEP_START_MEASUREMENT:
+            sampling_interval_ms = sampling_interval_ms_from_params(params)
+            self.gui.start_measurement(automated=True, sampling_interval_ms=sampling_interval_ms)
+            if sampling_interval_ms is not None:
+                self._log(f"Measurement started ({sampling_interval_ms} ms interval)")
             else:
                 self._log("Measurement started")
             return
 
-        elif type_ == "Stop Measurement":
+        elif type_ == STEP_STOP_MEASUREMENT:
             self.gui.stop_measurement(automated=True)
             self._log("Measurement stopped")
             return
 
-        elif type_ == "Export CSV":
+        elif type_ == STEP_EXPORT_CSV:
             self.export_csv(params)
             return
 
-        elif type_ == "Pressure Ramp":
+        elif type_ == STEP_PRESSURE_RAMP:
             self.ramp_pressure(params)
             return
 
-        elif type_ == "Flow Controller":
+        elif type_ == STEP_FLOW_CONTROLLER:
             self.flow_controller(params)
             return
 
-        elif type_ == "ZeroFluigent":
+        elif type_ == STEP_ZERO_FLUIGENT:
             selected_sns = params.get("sensors", [])
             self._log(f"Zeroing Fluigent sensors: {selected_sns if selected_sns else 'All'}")
             for sensor in getattr(self.gui, "fluigent_sensors", []):
@@ -274,8 +335,8 @@ class ProgramRunner:
                     self._log(f"Failed to zero {sensor_tag}: {e}")
             return
 
-        elif type_ == "Calibrate With Fluigent Sensor":
-            sensor_name = params.get("sensor", "")
+        elif type_ == STEP_CALIBRATE_WITH_FLUIGENT_SENSOR:
+            sensor_name = params.get(PARAM_SENSOR, "")
             sensor = next((s for s in getattr(self.gui, "fluigent_sensors", []) if f"SN{s.device_sn}" == sensor_name), None)
             if sensor is None:
                 self._log(f"Sensor {sensor_name} not found.")
@@ -300,10 +361,10 @@ class ProgramRunner:
             self._log(f"Offset set to {self.gui.offset:.2f} mbar using {sensor_name}")
             return
 
-        elif type_ == "Loop":
-            start_step = max(1, int(params.get("start_step", 1)))
-            end_step = max(start_step, int(params.get("end_step", start_step)))
-            repetitions = max(1, int(params.get("repetitions", 1)))
+        elif type_ == STEP_LOOP:
+            start_step = max(1, int(params.get(PARAM_START_STEP, 1)))
+            end_step = max(start_step, int(params.get(PARAM_END_STEP, start_step)))
+            repetitions = max(1, int(params.get(PARAM_REPETITIONS, 1)))
             start_idx = max(0, start_step - 1)
             end_idx = min(len(self.steps), end_step)
             loop_steps = self.steps[start_idx:end_idx]
@@ -322,12 +383,12 @@ class ProgramRunner:
             self._log("Loop finished.")
             return
 
-        elif type_ == "Dose Volume":
-            sensor_name = params.get("flow_sensor", "")
-            pneumatic_valve = params.get("pneumatic_valve", "")
-            fluidic_valve = params.get("fluidic_valve", "")
-            target_volume = float(params.get("target_volume", 0.0))
-            input_pressure = float(params.get("input_pressure", 0.0))
+        elif type_ == STEP_DOSE_VOLUME:
+            sensor_name = params.get(PARAM_FLOW_SENSOR, "")
+            pneumatic_valve = params.get(PARAM_PNEUMATIC_VALVE, "")
+            fluidic_valve = params.get(PARAM_FLUIDIC_VALVE, "")
+            target_volume = float(params.get(PARAM_TARGET_VOLUME, 0.0))
+            input_pressure = float(params.get(PARAM_INPUT_PRESSURE, 0.0))
 
             if pneumatic_valve:
                 self.control_valve(pneumatic_valve, True)
@@ -358,13 +419,13 @@ class ProgramRunner:
             self._log(f"Dose complete: {volume_ul:.1f} uL (target: {target_volume} uL)")
             return
 
-        elif type_ == "Rotary Valve":
+        elif type_ == STEP_ROTARY_VALVE:
             self._ensure_rotary_connected()
             box = self._get_rotary_box()
             ctl = box.ctl
-            action = (params.get("action") or "goto").lower()
+            action = (params.get(PARAM_ACTION) or "goto").lower()
 
-            if action == "home":
+            if action == ROTARY_ACTION_HOME:
                 self._log("Rotary Valve: Home")
                 self._invoke_gui(lambda: box.movedStarted.emit(1))
                 self._invoke_gui(lambda: box.show_target(1))
@@ -378,8 +439,8 @@ class ProgramRunner:
                 self._invoke_gui(lambda a=actual: box.movedFinished.emit(int(a)))
                 return
 
-            if action in ("prev", "next"):
-                delta = -1 if action == "prev" else +1
+            if action in (ROTARY_ACTION_PREV, ROTARY_ACTION_NEXT):
+                delta = -1 if action == ROTARY_ACTION_PREV else +1
                 num_ports, current_port = self._rv_get_state()
                 if not (num_ports and current_port):
                     self._log("Rotary Valve: cannot compute relative target (not homed or unknown state).")
@@ -389,9 +450,9 @@ class ProgramRunner:
                 self._rv_goto(box, ctl, target, wait=True)
                 return
 
-            if action == "goto":
-                port = int(params.get("port", 1))
-                wait = bool(params.get("wait", True))
+            if action == ROTARY_ACTION_GOTO:
+                port = int(params.get(PARAM_PORT, 1))
+                wait = bool(params.get(PARAM_WAIT, True))
                 self._log(f"Rotary Valve: Goto {port} (wait={wait})")
                 self._rv_goto(box, ctl, port, wait=wait)
                 return
@@ -399,7 +460,7 @@ class ProgramRunner:
             self._log(f"Unknown Rotary Valve action: {action}")
             return
 
-        elif type_ == "Load Sequence":
+        elif type_ == STEP_LOAD_SEQUENCE:
             self.load_sequence(params)
             return
 
@@ -409,9 +470,9 @@ class ProgramRunner:
         """
         Execute a pressure-ramp step.
         """
-        p_start = params.get("start_pressure", 0.0)
-        p_end = params.get("end_pressure", 100.0)
-        duration = params.get("duration", 10.0)
+        p_start = params.get(PARAM_START_PRESSURE, 0.0)
+        p_end = params.get(PARAM_END_PRESSURE, 100.0)
+        duration = params.get(PARAM_DURATION, 10.0)
         steps = int(duration / 0.2)
         if steps < 1:
             steps = 1
@@ -429,18 +490,18 @@ class ProgramRunner:
         """
         Run the PID-based flow-control step.
         """
-        sensor_name = params.get("sensor", "")
-        target_flow = params.get("target_flow", 50.0)
-        p_max = params.get("max_pressure", 350.0)
-        p_min = params.get("min_pressure", 0.0)
-        tolerance_percent = params.get("tolerance_percent", 10.0)
-        stable_time = params.get("stable_time", 5.0)
-        continuous = params.get("continuous", False)
+        sensor_name = params.get(PARAM_SENSOR, "")
+        target_flow = params.get(PARAM_TARGET_FLOW, 50.0)
+        p_max = params.get(PARAM_MAX_PRESSURE, 350.0)
+        p_min = params.get(PARAM_MIN_PRESSURE, 0.0)
+        tolerance_percent = params.get(PARAM_TOLERANCE_PERCENT, 10.0)
+        stable_time = params.get(PARAM_STABLE_TIME, 5.0)
+        continuous = params.get(PARAM_CONTINUOUS, False)
         
         # PID parameters from the step or the conservative defaults.
-        Kp = params.get("Kp", 0.1)
-        Ki = params.get("Ki", 0.1)
-        Kd = params.get("Kd", 0.05)
+        Kp = params.get(PARAM_KP, 0.1)
+        Ki = params.get(PARAM_KI, 0.1)
+        Kd = params.get(PARAM_KD, 0.05)
     
         tolerance = target_flow * (tolerance_percent / 100.0)
         current_pressure = self.gui.target_pressure
@@ -690,8 +751,8 @@ class ProgramRunner:
      
     def load_sequence(self, params):
         """Load a JSON sequence and inject its steps directly into the running program."""
-        filename = params.get("filename")
-        filepath = params.get("path", filename)  # Use the explicit path when the editor provided one.
+        filename = params.get(PARAM_FILENAME)
+        filepath = params.get(PARAM_PATH, filename)  # Use the explicit path when the editor provided one.
 
         if not filepath:
             self._log("No sequence file specified.")
@@ -753,8 +814,8 @@ class ProgramRunner:
         self._log("All valves closed, pressure set to 0 mbar.")
 
     def export_csv(self, params):
-        folder = params.get("folder")
-        prefix = params.get("filename_prefix", "measurement")
+        folder = params.get(PARAM_FOLDER)
+        prefix = params.get(PARAM_FILENAME_PREFIX, "measurement")
         if not folder:
             self._log("No export folder specified.")
             return

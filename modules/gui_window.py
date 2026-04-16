@@ -21,6 +21,7 @@ from modules.plot_area import PlotArea
 from modules.export_dialog import ExportDialog
 from modules.sampling_manager import SamplingDialog, sampling_manager
 from modules.flow_sensor import SensirionFlowSensor
+from modules.measurement_session import MeasurementSession
 from modules.fluigent_wrapper import detect_fluigent_sensors
 from modules.program_runner import ProgramRunner
 from modules.program_worker import ProgramWorker
@@ -55,8 +56,9 @@ class PressureFlowGUI(QWidget):
         self.target_pressure = 0.0
         self.is_measuring = False
         self.start_timestamp = None
-        self.sampling_rate = 250  # in ms
-        sampling_manager.set_sampling_rate(self.sampling_rate)
+        self.sampling_interval_ms = 250
+        self.sampling_rate = self.sampling_interval_ms  # Legacy alias for older helpers.
+        sampling_manager.set_sampling_interval_ms(self.sampling_interval_ms)
         sampling_manager.reset_time()
         
         # make the GUI globally available for sampling_manager & dialogs
@@ -66,13 +68,8 @@ class PressureFlowGUI(QWidget):
         
     
         # --- Measurement buffers ---
-        self.time_data = deque()       
-        self.target_data = deque()
-        self.corrected_data = deque()
-        self.measured_data = deque()
-        self.valve_states = []
-        self.flow_data = [deque() for _ in range(4)]
-        self.abs_time_data = []
+        self.measurement_session = MeasurementSession(flow_channel_count=4)
+        self._bind_measurement_buffers()
     
         # --- Connect to Modbus ---
         try:
@@ -108,7 +105,8 @@ class PressureFlowGUI(QWidget):
         
         # --- Fluigent sensors ---
         self.fluigent_sensors = detect_fluigent_sensors()
-        self.fluigent_pressure_data = [deque() for _ in self.fluigent_sensors]
+        self.measurement_session.set_fluigent_channel_count(len(self.fluigent_sensors))
+        self._bind_measurement_buffers()
         
         # --- Update the shared editor/runner catalogs ---
         # Valves: keep the order aligned with _valve_meta / self.valves.
@@ -127,7 +125,7 @@ class PressureFlowGUI(QWidget):
 
         # --- Rotary Valve ---
         self.rotaryBox = RotaryValveQBox(self)
-        self.rotary_active = []  # per-sample: active rotary port (int 1..12) or None
+        self.rotary_active = self.measurement_session.rotary_active  # per-sample active rotary port.
         
         self.rotary_is_busy = False
         self.rotary_last_port = None
@@ -162,7 +160,7 @@ class PressureFlowGUI(QWidget):
         # --- Start the periodic update timer ---
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_data)
-        self.timer.start(self.sampling_rate)
+        self.timer.start(self.sampling_interval_ms)
         
     
         # --- Build the UI ---
@@ -179,6 +177,19 @@ class PressureFlowGUI(QWidget):
         # Esc -> close the window and trigger closeEvent for a safe shutdown.
         QShortcut(QKeySequence(Qt.Key_Escape), self, activated=self.close)
 
+
+    def _bind_measurement_buffers(self):
+        """Expose measurement-session buffers through the legacy GUI attributes."""
+        session = self.measurement_session
+        self.time_data = session.time_data
+        self.target_data = session.target_data
+        self.corrected_data = session.corrected_data
+        self.measured_data = session.measured_data
+        self.valve_states = session.valve_states
+        self.flow_data = session.flow_data
+        self.fluigent_pressure_data = session.fluigent_pressure_data
+        self.abs_time_data = session.abs_time_data
+        self.rotary_active = session.rotary_active
 
     def _connect_modbus_auto(self) -> ModbusTcpClient:
         """
@@ -365,7 +376,7 @@ class PressureFlowGUI(QWidget):
         
         self.btn_sampling = QToolButton()
         self.btn_sampling.setIcon(QIcon(resource_path("icons/sampling.png")))
-        self.btn_sampling.setToolTip("Set sampling rate")
+        self.btn_sampling.setToolTip("Set sampling interval")
         self.btn_sampling.clicked.connect(self.open_sampling_dialog)
         toolbar.addWidget(self.btn_sampling)
         
@@ -623,7 +634,7 @@ class PressureFlowGUI(QWidget):
         except Exception as e:
             print(f"[Fluigent] Zeroing error: {e}")
         finally:
-            self.timer.start(self.sampling_rate)
+            self.timer.start(self.sampling_interval_ms)
             print("[Fluigent] Update loop resumed.")
     
         QMessageBox.information(self, "Zero", f"{len(dialog.selected_sensors)} sensor(s) zeroed successfully.")
@@ -644,17 +655,22 @@ class PressureFlowGUI(QWidget):
         except ValueError:
             QMessageBox.warning(self, "Invalid Input", "Please enter a valid number.")
 
-    def set_sampling_rate_ms(self, value_ms):
-        """Apply a new sampling interval and keep the timer and shared manager in sync."""
-        value_ms = max(1, int(value_ms))
-        self.sampling_rate = value_ms
-        sampling_manager.set_sampling_rate(value_ms)
+    def set_sampling_interval_ms(self, interval_ms):
+        """Apply a sampling interval in milliseconds and keep all timers in sync."""
+        interval_ms = max(1, int(interval_ms))
+        self.sampling_interval_ms = interval_ms
+        self.sampling_rate = interval_ms  # Legacy alias for older helpers.
+        sampling_manager.set_sampling_interval_ms(interval_ms)
         if hasattr(self, "timer"):
-            self.timer.setInterval(value_ms)
+            self.timer.setInterval(interval_ms)
             if not self.timer.isActive():
-                self.timer.start(value_ms)
+                self.timer.start(interval_ms)
 
-    def start_measurement(self, automated=False, sampling_rate_hz=None):
+    def set_sampling_rate_ms(self, value_ms):
+        """Backward-compatible wrapper for older code using the rate name."""
+        self.set_sampling_interval_ms(value_ms)
+
+    def start_measurement(self, automated=False, sampling_interval_ms=None, sampling_rate_hz=None):
         """Initialize a new measurement and reset the shared sampling-manager time base."""
         if not automated:
             reply = QMessageBox.question(
@@ -666,11 +682,17 @@ class PressureFlowGUI(QWidget):
     
         self.is_measuring = True
 
-        if sampling_rate_hz is not None:
+        if sampling_interval_ms is None and sampling_rate_hz is not None:
+            # Legacy automation programs stored this value as a frequency in Hz.
             try:
-                value_ms = max(1, int(round(1000.0 / float(sampling_rate_hz))))
-                self.set_sampling_rate_ms(value_ms)
+                sampling_interval_ms = max(1, int(round(1000.0 / float(sampling_rate_hz))))
             except (TypeError, ValueError, ZeroDivisionError):
+                sampling_interval_ms = None
+
+        if sampling_interval_ms is not None:
+            try:
+                self.set_sampling_interval_ms(sampling_interval_ms)
+            except (TypeError, ValueError):
                 pass
     
         # Reset the shared time base for plots and events.
@@ -678,17 +700,7 @@ class PressureFlowGUI(QWidget):
         self.start_timestamp = sampling_manager.start_timestamp
     
         # Clear all measurement buffers for the new run.
-        self.rotary_active.clear()
-        self.time_data.clear()
-        self.target_data.clear()
-        self.corrected_data.clear()
-        self.measured_data.clear()
-        self.valve_states.clear()
-        for d in self.flow_data:
-            d.clear()
-        for d in self.fluigent_pressure_data:
-            d.clear()
-        self.abs_time_data.clear()
+        self.measurement_session.reset()
         
         # Reset the plot x-axis so the new run starts at 0 s.
         try:
@@ -906,12 +918,7 @@ class PressureFlowGUI(QWidget):
             
     def _truncate_data(self):
         """Roll back the partially appended sample if the pressure readout fails."""
-        if len(self.time_data) > 0:
-            self.time_data.pop()
-        if hasattr(self, "abs_time_data") and len(self.abs_time_data) > 0:
-            self.abs_time_data.pop()
-        if len(self.target_data) > 0:
-            self.target_data.pop()
+        self.measurement_session.rollback_partial_sample()
 
     def do_csv_export(self, path=None, silent=False):
         """
@@ -922,18 +929,8 @@ class PressureFlowGUI(QWidget):
         from modules.export_dialog import ExportDialog
         from modules.sampling_manager import sampling_manager
     
-        # --- Fetch the measurement buffers from the shared sampling manager ---
-        (
-            time_data,
-            target_data,
-            corrected_data,
-            measured_data,
-            valve_states,
-            flow_data,
-            fluigent_data,
-            sampling_rate,
-            start_timestamp
-        ) = sampling_manager.get_all_data()
+        # --- Fetch a detached export snapshot from the shared sampling manager ---
+        snapshot = sampling_manager.get_export_snapshot()
     
         # --- Collect profile-specific metadata for the CSV header ---
         try:
@@ -946,49 +943,22 @@ class PressureFlowGUI(QWidget):
             profile_name = self.hw_profile.get("name")
         except Exception:
             profile_name = None
+
+        snapshot.with_metadata(
+            offset=self.offset,
+            valve_names=valve_names,
+            profile_name=profile_name,
+            valve_coils=valve_coils,
+        )
     
         # --- Interactive GUI export ---
         if path is None:
-            dlg = ExportDialog(
-                self,
-                time_data,
-                target_data,
-                corrected_data,
-                measured_data,
-                valve_states,
-                flow_data,
-                fluigent_data,
-                self.offset,
-                sampling_rate,
-                start_timestamp,
-                rotary_active=list(self.rotary_active),
-                valve_names=valve_names,
-                profile_name=profile_name,
-                valve_coils=valve_coils
-            )
+            dlg = ExportDialog(self, snapshot=snapshot)
             dlg.exec_()
     
         # --- Non-interactive export used by automation ---
         else:
-            dlg = ExportDialog(
-                parent=self,
-                time_data=time_data,
-                target=target_data,
-                corrected=corrected_data,
-                measured=measured_data,
-                valve_states=valve_states,
-                flow_data=flow_data,
-                fluigent_data=fluigent_data,
-                offset=self.offset,
-                sampling_rate=sampling_rate,
-                start_timestamp=start_timestamp,
-                rotary_active=list(self.rotary_active),
-                auto_path=path,
-                silent=silent,
-                valve_names=valve_names,
-                profile_name=profile_name,
-                valve_coils=valve_coils
-            )
+            dlg = ExportDialog(parent=self, snapshot=snapshot, auto_path=path, silent=silent)
             dlg.save_csv(path=path, silent=silent)
 
 

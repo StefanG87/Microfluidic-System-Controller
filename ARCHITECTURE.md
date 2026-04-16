@@ -1,4 +1,4 @@
-﻿# Architecture Overview
+# Architecture Overview
 
 ## Program summary
 
@@ -18,6 +18,7 @@ The application is a laboratory control and monitoring GUI for a microfluidic me
 
 - `modules/gui_window.py`: main controller window and runtime coordinator
 - `modules/plot_area.py`: live Matplotlib plot widget
+- `modules/measurement_session.py`: measurement-buffer owner and `ExportSnapshot` provider for plotting/CSV data
 - `modules/sampling_manager.py`: shared time base and sampling dialog
 - `modules/export_dialog.py`: CSV export UI
 - `modules/csv_exporter.py`: filename and export folder helpers
@@ -56,7 +57,7 @@ The editor serializes step dictionaries into JSON, and `ProgramRunner` consumes 
 - `Valve`: `valve_name`, `status` (`Open` or `Close`)
 - `Wait`: `time_sec`
 - `Wait for Sensor Event`: `sensor`, `condition`, `target_value`, `tolerance`, `stable_time`
-- `Start Measurement`: `sampling_rate` in Hz inside the step JSON; the GUI converts that into its internal timer interval
+- `Start Measurement`: `sampling_interval_ms` in milliseconds inside the step JSON; legacy `sampling_rate` values are still read as Hz and converted for old programs
 - `Stop Measurement`: no parameters
 - `Export CSV`: `filename_prefix`, `folder`
 - `Pressure Ramp`: `start_pressure`, `end_pressure`, `duration`
@@ -68,13 +69,13 @@ The editor serializes step dictionaries into JSON, and `ProgramRunner` consumes 
 - `Dose Volume`: `flow_sensor`, `pneumatic_valve`, `fluidic_valve`, `target_volume`, `input_pressure`
 - `Rotary Valve`: `action`, optional `port`, optional `wait`
 
-This contract is stable enough to document, but it is not yet encapsulated in one shared schema or validation layer.
+This contract is centralized in `modules/program_contract.py`. The module defines the persisted step names, parameter keys, and the legacy sampling-rate conversion used by both editor and runner code.
 
 ## Current boundaries and coupling
 
 ### Strong couplings that exist today
 
-- `PressureFlowGUI` owns UI state, device state, measurement buffers, plotting coordination, export orchestration, and program bootstrapping.
+- `PressureFlowGUI` owns UI state, device state, plotting coordination, export orchestration, and program bootstrapping; measurement buffers and export snapshots are now grouped in `MeasurementSession`.
 - `ProgramRunner` depends directly on GUI attributes and methods instead of a narrower runtime service interface.
 - Editor availability data is published globally through `task_globals.py`.
 - Resource and import resolution still depend partly on startup-time path bootstrapping.

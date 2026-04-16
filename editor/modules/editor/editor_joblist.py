@@ -6,6 +6,50 @@ from functools import partial
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
+from modules.program_contract import (
+    PARAM_ACTION,
+    PARAM_CONDITION,
+    PARAM_CONTINUOUS,
+    PARAM_DELTA_MBAR,
+    PARAM_END_STEP,
+    PARAM_FILENAME,
+    PARAM_FILENAME_PREFIX,
+    PARAM_INPUT_PRESSURE,
+    PARAM_MAX_PRESSURE,
+    PARAM_MIN_PRESSURE,
+    PARAM_PORT,
+    PARAM_PRESSURE,
+    PARAM_REPETITIONS,
+    PARAM_SENSOR,
+    PARAM_STABLE_TIME,
+    PARAM_START_STEP,
+    PARAM_STATUS,
+    PARAM_TARGET_FLOW,
+    PARAM_TOLERANCE_PERCENT,
+    PARAM_TIME_SEC,
+    PARAM_TARGET_VALUE,
+    PARAM_TARGET_VOLUME,
+    PARAM_TOLERANCE,
+    PARAM_VALVE_NAME,
+    PARAM_WAIT,
+    STEP_ADD_PRESSURE,
+    STEP_CALIBRATE_WITH_FLUIGENT_SENSOR,
+    STEP_DOSE_VOLUME,
+    STEP_EXPORT_CSV,
+    STEP_FLOW_CONTROLLER,
+    STEP_LOAD_SEQUENCE,
+    STEP_LOOP,
+    STEP_PRESSURE_RAMP,
+    STEP_ROTARY_VALVE,
+    STEP_SET_PRESSURE,
+    STEP_START_MEASUREMENT,
+    STEP_STOP_MEASUREMENT,
+    STEP_VALVE,
+    STEP_WAIT,
+    STEP_WAIT_FOR_SENSOR_EVENT,
+    STEP_ZERO_FLUIGENT,
+    sampling_interval_ms_from_params,
+)
 from PyQt5.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -119,13 +163,13 @@ class EditorJobList(QWidget):
             item_layout.addWidget(label)
             item_layout.addStretch()
 
-            if step.type == "Flow Controller":
+            if step.type == STEP_FLOW_CONTROLLER:
                 pid_button = QPushButton("\U0001F6E0")
                 pid_button.setMaximumWidth(30)
                 pid_button.clicked.connect(partial(self.edit_pid_parameters, step))
                 item_layout.addWidget(pid_button)
 
-            if step.type == "Valve":
+            if step.type == STEP_VALVE:
                 toggle_button = self.create_toggle_button(step)
                 item_layout.addWidget(toggle_button)
 
@@ -145,54 +189,54 @@ class EditorJobList(QWidget):
 
     def format_step_text(self, step):
         """Return the human-readable summary shown for one step."""
-        if step.type == "Set Pressure":
-            pressure = step.params.get("pressure", 0.0)
+        if step.type == STEP_SET_PRESSURE:
+            pressure = step.params.get(PARAM_PRESSURE, 0.0)
             return f"Set Pressure ({pressure} mbar)"
 
-        if step.type == "Add Pressure":
-            delta = step.params.get("delta_mbar", 0.0)
+        if step.type == STEP_ADD_PRESSURE:
+            delta = step.params.get(PARAM_DELTA_MBAR, 0.0)
             return f"Add Pressure (+{delta} mbar)"
 
-        if step.type == "Valve":
-            valve_name = step.params.get("valve_name", "Unknown")
-            status = step.params.get("status", "Open")
+        if step.type == STEP_VALVE:
+            valve_name = step.params.get(PARAM_VALVE_NAME, "Unknown")
+            status = step.params.get(PARAM_STATUS, "Open")
             return f"Valve {valve_name} ({status})"
 
-        if step.type == "Wait":
-            time_sec = step.params.get("time_sec", 1.0)
+        if step.type == STEP_WAIT:
+            time_sec = step.params.get(PARAM_TIME_SEC, 1.0)
             return f"Wait ({time_sec} s)"
 
-        if step.type == "Wait for Sensor Event":
-            sensor = step.params.get("sensor", "Unknown")
-            condition = step.params.get("condition", ">")
-            target_value = step.params.get("target_value", 0.0)
-            tolerance = step.params.get("tolerance", 0.0)
-            stable_time = step.params.get("stable_time", 0.0)
+        if step.type == STEP_WAIT_FOR_SENSOR_EVENT:
+            sensor = step.params.get(PARAM_SENSOR, "Unknown")
+            condition = step.params.get(PARAM_CONDITION, ">")
+            target_value = step.params.get(PARAM_TARGET_VALUE, 0.0)
+            tolerance = step.params.get(PARAM_TOLERANCE, 0.0)
+            stable_time = step.params.get(PARAM_STABLE_TIME, 0.0)
             return f"Sensor {sensor} {condition} {target_value} (+/-{tolerance}, {stable_time}s)"
 
-        if step.type == "Start Measurement":
-            sampling_rate = step.params.get("sampling_rate", 10)
-            return f"Start Measurement (Rate: {sampling_rate} Hz)"
+        if step.type == STEP_START_MEASUREMENT:
+            interval_ms = sampling_interval_ms_from_params(step.params, default=250)
+            return f"Start Measurement (Interval: {interval_ms} ms)"
 
-        if step.type == "Stop Measurement":
+        if step.type == STEP_STOP_MEASUREMENT:
             return "Stop Measurement"
 
-        if step.type == "Export CSV":
-            prefix = step.params.get("filename_prefix", "Measurement")
+        if step.type == STEP_EXPORT_CSV:
+            prefix = step.params.get(PARAM_FILENAME_PREFIX, "Measurement")
             return f"Export CSV (Prefix: {prefix})"
 
-        if step.type == "Pressure Ramp":
+        if step.type == STEP_PRESSURE_RAMP:
             return (
                 f"Pressure Ramp ({step.params.get('start_pressure', 0.0)} -> "
                 f"{step.params.get('end_pressure', 100.0)} mbar)"
             )
 
-        if step.type == "Flow Controller":
-            target_flow = step.params.get("target_flow", 50.0)
-            max_pressure = step.params.get("max_pressure", 350.0)
-            min_pressure = step.params.get("min_pressure", 0.0)
-            tolerance = step.params.get("tolerance_percent", 10.0)
-            continuous = "Continuous" if step.params.get("continuous", False) else "Stable"
+        if step.type == STEP_FLOW_CONTROLLER:
+            target_flow = step.params.get(PARAM_TARGET_FLOW, 50.0)
+            max_pressure = step.params.get(PARAM_MAX_PRESSURE, 350.0)
+            min_pressure = step.params.get(PARAM_MIN_PRESSURE, 0.0)
+            tolerance = step.params.get(PARAM_TOLERANCE_PERCENT, 10.0)
+            continuous = "Continuous" if step.params.get(PARAM_CONTINUOUS, False) else "Stable"
 
             if "Kp" in step.params:
                 kp = step.params.get("Kp", 0.1)
@@ -209,38 +253,38 @@ class EditorJobList(QWidget):
                 f"Min: {min_pressure} mbar, Tolerance: +/-{tolerance}%, {continuous})"
             )
 
-        if step.type == "ZeroFluigent":
+        if step.type == STEP_ZERO_FLUIGENT:
             sensor_list = step.params.get("sensors", [])
             if not sensor_list:
                 return "Zero Fluigent Sensors (All)"
             return f"Zero Fluigent Sensors ({', '.join(sensor_list)})"
 
-        if step.type == "Calibrate With Fluigent Sensor":
-            sensor_name = step.params.get("sensor", "Unknown")
+        if step.type == STEP_CALIBRATE_WITH_FLUIGENT_SENSOR:
+            sensor_name = step.params.get(PARAM_SENSOR, "Unknown")
             return f"Calibrate With {sensor_name}"
 
-        if step.type == "Loop":
-            start_step = step.params.get("start_step", 1)
-            end_step = step.params.get("end_step", 1)
-            repetitions = step.params.get("repetitions", 1)
+        if step.type == STEP_LOOP:
+            start_step = step.params.get(PARAM_START_STEP, 1)
+            end_step = step.params.get(PARAM_END_STEP, 1)
+            repetitions = step.params.get(PARAM_REPETITIONS, 1)
             return f"Loop (Steps {start_step}-{end_step}, {repetitions}x)"
 
-        if step.type == "Load Sequence":
-            filename = step.params.get("filename", "Unknown")
+        if step.type == STEP_LOAD_SEQUENCE:
+            filename = step.params.get(PARAM_FILENAME, "Unknown")
             return f"Load Sequence ({filename})"
 
-        if step.type == "Dose Volume":
-            volume = step.params.get("target_volume", 100.0)
+        if step.type == STEP_DOSE_VOLUME:
+            volume = step.params.get(PARAM_TARGET_VOLUME, 100.0)
             pneumatic_valve = step.params.get("pneumatic_valve", "?")
             fluidic_valve = step.params.get("fluidic_valve", "?")
-            pressure = step.params.get("input_pressure", "?")
+            pressure = step.params.get(PARAM_INPUT_PRESSURE, "?")
             return f"Dose {volume} uL @ {pressure} mbar ({pneumatic_valve} -> {fluidic_valve})"
 
-        if step.type == "Rotary Valve":
-            action = step.params.get("action", "goto")
+        if step.type == STEP_ROTARY_VALVE:
+            action = step.params.get(PARAM_ACTION, "goto")
             if action == "goto":
-                port = step.params.get("port", 1)
-                wait = step.params.get("wait", True)
+                port = step.params.get(PARAM_PORT, 1)
+                wait = step.params.get(PARAM_WAIT, True)
                 return f"Rotary Valve (Goto {port}, wait={wait})"
             return f"Rotary Valve ({action})"
 
@@ -252,8 +296,8 @@ class EditorJobList(QWidget):
     def toggle_valve(self, step):
         """Switch a valve step between Open and Close."""
         self.save_state()
-        if step.type == "Valve":
-            if step.params.get("status") == "Open":
+        if step.type == STEP_VALVE:
+            if step.params.get(PARAM_STATUS) == "Open":
                 step.params["status"] = "Close"
             else:
                 step.params["status"] = "Open"
@@ -276,7 +320,7 @@ class EditorJobList(QWidget):
 
     def edit_pid_parameters(self, step):
         """Edit PID gains for a flow controller step."""
-        if step.type != "Flow Controller":
+        if step.type != STEP_FLOW_CONTROLLER:
             QMessageBox.warning(self, "Error", "PID parameters are only available for Flow Controller.")
             return
 
