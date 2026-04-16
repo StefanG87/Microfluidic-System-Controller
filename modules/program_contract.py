@@ -16,6 +16,7 @@ STEP_START_MEASUREMENT = "Start Measurement"
 STEP_STOP_MEASUREMENT = "Stop Measurement"
 STEP_EXPORT_CSV = "Export CSV"
 STEP_PRESSURE_RAMP = "Pressure Ramp"
+STEP_POLYNOMIAL_PRESSURE = "PolynomialPressure"
 STEP_FLOW_CONTROLLER = "Flow Controller"
 STEP_ZERO_FLUIGENT = "ZeroFluigent"
 STEP_CALIBRATE_WITH_FLUIGENT_SENSOR = "Calibrate With Fluigent Sensor"
@@ -41,6 +42,7 @@ STANDARD_STEP_NAMES = [
 
 SPECIAL_STEP_NAMES = [
     STEP_PRESSURE_RAMP,
+    STEP_POLYNOMIAL_PRESSURE,
     STEP_FLOW_CONTROLLER,
     STEP_LOAD_SEQUENCE,
     STEP_CALIBRATE_WITH_FLUIGENT_SENSOR,
@@ -76,6 +78,19 @@ PARAM_WAIT = "wait"
 PARAM_START_PRESSURE = "start_pressure"
 PARAM_END_PRESSURE = "end_pressure"
 PARAM_DURATION = "duration"
+PARAM_MODE = "mode"
+PARAM_ORDER = "order"
+PARAM_COEFFICIENTS = "coefficients"
+PARAM_CLAMP_MIN = "clamp_min"
+PARAM_CLAMP_MAX = "clamp_max"
+PARAM_SLEW_LIMIT = "slew_limit"
+PARAM_SAMPLE_INTERVAL = "sample_interval"
+PARAM_FEEDBACK_GAIN = "feedback_gain"
+PARAM_MAX_CORRECTION = "max_correction"
+PARAM_OFFSET_MBAR = "offset_mbar"
+PARAM_AMPLITUDE_MBAR = "amplitude_mbar"
+PARAM_PERIOD_S = "period_s"
+PARAM_PHASE_DEG = "phase_deg"
 PARAM_TARGET_FLOW = "target_flow"
 PARAM_MAX_PRESSURE = "max_pressure"
 PARAM_MIN_PRESSURE = "min_pressure"
@@ -108,3 +123,4 @@ def sampling_interval_ms_from_params(params, default=None):
     if interval_ms is None:
         return default
     return max(1, int(interval_ms))
+

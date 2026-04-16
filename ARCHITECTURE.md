@@ -61,6 +61,7 @@ The editor serializes step dictionaries into JSON, and `ProgramRunner` consumes 
 - `Stop Measurement`: no parameters
 - `Export CSV`: `filename_prefix`, `folder`
 - `Pressure Ramp`: `start_pressure`, `end_pressure`, `duration`
+- `PolynomialPressure`: `mode`, `order`, `coefficients`, `duration`, `clamp_min`, `clamp_max`, `slew_limit`, `sample_interval`
 - `Flow Controller`: `sensor`, `target_flow`, `max_pressure`, `min_pressure`, `tolerance_percent`, `stable_time`, `continuous`, optional PID gains
 - `ZeroFluigent`: `sensors`, where an empty list means all detected Fluigent sensors
 - `Calibrate With Fluigent Sensor`: `sensor`
@@ -76,8 +77,8 @@ This contract is centralized in `modules/program_contract.py`. The module define
 ### Strong couplings that exist today
 
 - `PressureFlowGUI` owns UI state, device state, plotting coordination, export orchestration, and program bootstrapping; measurement buffers and export snapshots are now grouped in `MeasurementSession`.
-- `PressureFlowGUI` exposes narrow runtime methods for automation pressure control, sensor reads, valve writes, measurement start/stop, and CSV export.
-- `ProgramRunner` uses those runtime methods for common hardware actions, but still depends on the GUI object for logging and rotary-valve widget coordination.
+- `PressureFlowGUI` exposes narrow runtime methods for automation pressure control, sensor reads, valve writes, measurement start/stop, CSV export, and rotary-valve program actions.
+- `ProgramRunner` uses those runtime methods for hardware-facing actions and now only keeps step dispatch, flow-control loops, and program-specific control flow.
 - Editor availability data is published globally through `task_globals.py`.
 - Resource and import resolution still depend partly on startup-time path bootstrapping.
 
@@ -92,12 +93,13 @@ These couplings are workable for the current application but make behavior harde
 - Editor sensor-event display now uses `target_value` consistently.
 - Embedded editor device publication now goes through one central task-global update path.
 - Runner CSV export uses one central filename helper.
+- Program-runner smoke test programs are available in `test_programs/`.
 
 ## Recommended next refactor direction
 
 1. Keep `PressureFlowGUI` as the main window, but move narrow responsibilities into helpers rather than rewriting the app.
 2. Align editor task parameters with runtime execution semantics.
 3. Centralize project-root/resource helpers and reduce `sys.path` manipulation.
-4. Move rotary-valve program actions behind a similarly narrow runtime boundary once the widget/threading behavior is covered by tests.
+4. Fix the programmatic `Stop Measurement` path so it does not open the manual export dialog.
 5. Replace broad exception swallowing in the highest-value paths first.
 6. Add a few hardware-free smoke tests for editor serialization and runner step dispatch.

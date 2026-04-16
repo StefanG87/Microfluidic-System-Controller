@@ -1,5 +1,7 @@
 """Worker object that runs automation programs off the GUI thread."""
 
+import traceback
+
 from PyQt5.QtCore import QObject, pyqtSignal
 
 
@@ -15,21 +17,24 @@ class ProgramWorker(QObject):
         super().__init__()
         self.runner = runner
         self.running = False
+        self._stop_requested = False
 
     def run(self):
         """Start the program runner inside the worker thread."""
         try:
             self.running = True
+            self._stop_requested = False
             self.runner.run_program(log_callback=self.log_message.emit)
-            if self.running:
-                self.finished.emit()
-        except Exception as e:
-            self.error.emit(f"Program error:\n{str(e)}")
+            if self._stop_requested:
+                self.stopped.emit("Program execution stopped.")
+        except Exception:
+            self.error.emit("Program error:\n" + traceback.format_exc())
         finally:
             self.running = False
+            self.finished.emit()
 
     def stop(self):
-        """Stop the program runner and emit the stopped signal."""
+        """Request program cancellation; the worker finishes after the current step returns."""
+        self._stop_requested = True
         self.running = False
         self.runner.stop()
-        self.stopped.emit("Program execution stopped.")

@@ -60,8 +60,8 @@ class RotaryValveQBox(QtWidgets.QGroupBox):
     def __init__(self, parent=None):
         super().__init__("Rotary Valve", parent)
         self.ctl = RotaryValveController()
-        self.thread: Optional[QtCore.QThread] = None
-        self.worker: Optional[_RVWorker] = None
+        self._worker_thread: Optional[QtCore.QThread] = None
+        self._worker: Optional[_RVWorker] = None
 
         # Internal state
         self._busy: bool = False
@@ -257,23 +257,23 @@ class RotaryValveQBox(QtWidgets.QGroupBox):
         self.lblStatus.setText(f"Status: {task} ...")
         self._busy = True
 
-        self.thread = QtCore.QThread(self)
-        self.worker = _RVWorker(task, self.ctl, arg)
-        self.worker.moveToThread(self.thread)
+        self._worker_thread = QtCore.QThread(self)
+        self._worker = _RVWorker(task, self.ctl, arg)
+        self._worker.moveToThread(self._worker_thread)
 
-        self.thread.started.connect(self.worker.run)
-        self.worker.finished.connect(self._done)
-        self.worker.error.connect(self._err)
+        self._worker_thread.started.connect(self._worker.run)
+        self._worker.finished.connect(self._done)
+        self._worker.error.connect(self._err)
 
         # cleanup
-        self.worker.finished.connect(self.thread.quit)
-        self.worker.error.connect(self.thread.quit)
-        self.worker.finished.connect(self.worker.deleteLater)
-        self.worker.error.connect(self.worker.deleteLater)
-        self.thread.finished.connect(self.thread.deleteLater)
-        self.thread.finished.connect(self._thread_cleared)
+        self._worker.finished.connect(self._worker_thread.quit)
+        self._worker.error.connect(self._worker_thread.quit)
+        self._worker.finished.connect(self._worker.deleteLater)
+        self._worker.error.connect(self._worker.deleteLater)
+        self._worker_thread.finished.connect(self._worker_thread.deleteLater)
+        self._worker_thread.finished.connect(self._thread_cleared)
 
-        self.thread.start()
+        self._worker_thread.start()
 
     def _done(self, msg: str) -> None:
         """
@@ -403,12 +403,12 @@ class RotaryValveQBox(QtWidgets.QGroupBox):
         self.cmbGoto.setEnabled(connected)
 
     def _thread_alive(self) -> bool:
-        t = getattr(self, "thread", None)
+        t = getattr(self, "_worker_thread", None)
         return bool(t) and not sip.isdeleted(t) and t.isRunning()
 
     def _thread_cleared(self, *_) -> None:
-        self.thread = None
-        self.worker = None
+        self._worker_thread = None
+        self._worker = None
 
     # ------------- lifecycle -------------
 
@@ -420,8 +420,8 @@ class RotaryValveQBox(QtWidgets.QGroupBox):
             pass
         try:
             if self._thread_alive():
-                self.thread.quit()
-                self.thread.wait(1500)
+                self._worker_thread.quit()
+                self._worker_thread.wait(1500)
         except Exception:
             pass
         try:

@@ -1,5 +1,6 @@
 
 import json
+import os
 import time
 
 from editor.modules.editor.task_globals import get_available_valves
@@ -53,6 +54,7 @@ from modules.program_contract import (
     STEP_LOAD_SEQUENCE,
     STEP_LOOP,
     STEP_PRESSURE_RAMP,
+    STEP_POLYNOMIAL_PRESSURE,
     STEP_ROTARY_VALVE,
     STEP_SET_PRESSURE,
     STEP_SET_PRESSURE_ZERO,
@@ -65,7 +67,15 @@ from modules.program_contract import (
     sampling_interval_ms_from_params,
 )
 from modules.csv_exporter import CSVExporter
-from modules.mf_common import load_last_comport, save_last_comport
+from modules.polynomial_pressure import (
+    apply_slew_limit,
+    clamp_pressure,
+    clamp_symmetric,
+    describe_pressure_function,
+    evaluate_pressure_target,
+    is_open_loop_sensor,
+    normalize_polynomial_pressure_params,
+)
 
 class ProgramRunner:
     """
@@ -77,115 +87,6 @@ class ProgramRunner:
         self.steps = []
         self.running = False
         self._log = self.gui.append_log
-        self._rotary_ready = False
-
-    def _invoke_gui(self, fn):
-        """
-        Run a small GUI update safely from the runner context.
-        """
-        try:
-            from PyQt5 import QtCore
-            QtCore.QTimer.singleShot(0, fn)
-        except Exception:
-            try:
-                fn()
-            except Exception:
-                pass
-    
-    def _get_rotary_box(self):
-        """
-        Fetch the RotaryValveQBox from the GUI dynamically.
-        """
-        box = getattr(self.gui, "rotaryBox", None)
-        if box is None:
-            raise RuntimeError("Rotary Valve widget not available in GUI.")
-        return box
-    
-    def _with_rotary_critical(self, fn):
-        """
-        Pause QBox polling while doing a blocking serial action to avoid
-        concurrent reads from the timer.
-        """
-        box = self._get_rotary_box()
-        timer = getattr(box, "timer", None)
-        was_active = bool(timer and timer.isActive())
-        try:
-            if was_active:
-                timer.stop()
-            return fn()
-        finally:
-            if was_active:
-                timer.start()
-    
-    def _ensure_rotary_connected(self):
-        """
-        Use the same controller instance as the GUI widget.
-        Try the last persisted COM port, then the current GUI selection, then auto-scan.
-        """
-        from modules.rvm_dt import list_serial_ports  # local import to avoid cycles
-
-        box = self._get_rotary_box()
-        ctl = box.ctl
-        if ctl.is_connected():
-            self._rotary_ready = True
-            return
-
-        # candidates: persisted COM -> GUI selection -> auto-scan
-        tried = set()
-        candidates = []
-
-        com_from_prefs = load_last_comport("rotary_valve") or ""
-        if com_from_prefs and com_from_prefs not in tried:
-            candidates.append(com_from_prefs)
-            tried.add(com_from_prefs)
-
-        try:
-            com_from_gui = box.cmbCom.currentText().strip()
-        except Exception:
-            com_from_gui = ""
-        if com_from_gui and com_from_gui not in tried:
-            candidates.append(com_from_gui)
-            tried.add(com_from_gui)
-
-        for port_name in list_serial_ports():
-            if port_name not in tried:
-                candidates.append(port_name)
-                tried.add(port_name)
-
-        last_error = None
-        positions = box.cmbGoto.count() or 12
-
-        for port in candidates:
-            try:
-                ctl.connect(port, positions=positions)
-                self._rotary_ready = True
-                try:
-                    save_last_comport(port, device_key="rotary_valve")
-                except Exception:
-                    pass
-                return
-            except Exception as e:
-                last_error = e
-
-        if last_error is not None:
-            raise last_error
-        raise RuntimeError("Unable to connect to the rotary valve.")
-
-    def _rv_get_state(self):
-        """Return `(num_ports, current_port)` for the connected rotary valve."""
-        self._ensure_rotary_connected()
-        box = self._get_rotary_box()
-        ctl = box.ctl
-        try:
-            num_ports = int(ctl.num_ports())
-        except Exception:
-            num_ports = int(box.cmbGoto.count() or 12)
-        try:
-            current_port = int(ctl.position())
-        except Exception:
-            current_port = 0
-        return num_ports, current_port
-
     @staticmethod
     def _rv_wrap_target(current_port, num_ports, delta):
         """Wrap a relative rotary move into the valid port range 1..N."""
@@ -193,24 +94,9 @@ class ProgramRunner:
             return 0
         return ((int(current_port) - 1 + int(delta)) % int(num_ports)) + 1
 
-    def _rv_goto(self, box, ctl, target, wait=True):
-        """Drive the rotary valve to a target port and synchronize the GUI state."""
-        target = int(target)
-        self._invoke_gui(lambda t=target: box.movedStarted.emit(t))
-        self._invoke_gui(lambda t=target: box.show_target(t))
-        self._with_rotary_critical(lambda: ctl.goto(target, wait=wait))
-
-        if wait:
-            try:
-                actual = int(ctl.position())
-            except Exception:
-                actual = 0
-            self._invoke_gui(box.sync_active_from_device)
-            self._invoke_gui(box.clear_target)
-            self._invoke_gui(lambda a=actual: box.movedFinished.emit(int(a)))
-
     def load_program(self, path):
         """Load a JSON program file into `self.steps` and validate its top-level shape."""
+        self._log = self.gui.append_log
         try:
             with open(path, "r", encoding="utf-8") as f:
                 steps = json.load(f)
@@ -239,6 +125,7 @@ class ProgramRunner:
                 self.execute_step(step, log_callback=self._log)
         finally:
             self.running = False
+            self._log = self.gui.append_log
 
     def execute_step(self, step, log_callback=None):
         """Execute a single program step dictionary produced by the editor."""
@@ -270,6 +157,8 @@ class ProgramRunner:
 
         elif type_ == STEP_VALVE:
             valve_name = params.get(PARAM_VALVE_NAME, "")
+            if not valve_name and params.get("valve_number") is not None:
+                valve_name = self._valve_name_from_legacy_number(params.get("valve_number"))
             status = params.get(PARAM_STATUS, "Open")
             state = str(status).lower() == STATUS_OPEN.lower()
             self.control_valve(valve_name, state)
@@ -312,6 +201,10 @@ class ProgramRunner:
 
         elif type_ == STEP_PRESSURE_RAMP:
             self.ramp_pressure(params)
+            return
+
+        elif type_ == STEP_POLYNOMIAL_PRESSURE:
+            self.polynomial_pressure(params)
             return
 
         elif type_ == STEP_FLOW_CONTROLLER:
@@ -411,41 +304,29 @@ class ProgramRunner:
             return
 
         elif type_ == STEP_ROTARY_VALVE:
-            self._ensure_rotary_connected()
-            box = self._get_rotary_box()
-            ctl = box.ctl
             action = (params.get(PARAM_ACTION) or "goto").lower()
 
             if action == ROTARY_ACTION_HOME:
                 self._log("Rotary Valve: Home")
-                self._invoke_gui(lambda: box.movedStarted.emit(1))
-                self._invoke_gui(lambda: box.show_target(1))
-                self._with_rotary_critical(lambda: ctl.home(wait=True))
-                try:
-                    actual = int(ctl.position())
-                except Exception:
-                    actual = 0
-                self._invoke_gui(box.sync_active_from_device)
-                self._invoke_gui(box.clear_target)
-                self._invoke_gui(lambda a=actual: box.movedFinished.emit(int(a)))
+                self.gui.home_rotary_from_program()
                 return
 
             if action in (ROTARY_ACTION_PREV, ROTARY_ACTION_NEXT):
                 delta = -1 if action == ROTARY_ACTION_PREV else +1
-                num_ports, current_port = self._rv_get_state()
+                num_ports, current_port = self.gui.get_rotary_state_from_program()
                 if not (num_ports and current_port):
                     self._log("Rotary Valve: cannot compute relative target (not homed or unknown state).")
                     return
                 target = self._rv_wrap_target(current_port, num_ports, delta)
                 self._log(f"Rotary Valve: {action} -> Goto {target}")
-                self._rv_goto(box, ctl, target, wait=True)
+                self.gui.goto_rotary_from_program(target, wait=True)
                 return
 
             if action == ROTARY_ACTION_GOTO:
                 port = int(params.get(PARAM_PORT, 1))
                 wait = bool(params.get(PARAM_WAIT, True))
                 self._log(f"Rotary Valve: Goto {port} (wait={wait})")
-                self._rv_goto(box, ctl, port, wait=wait)
+                self.gui.goto_rotary_from_program(port, wait=wait)
                 return
 
             self._log(f"Unknown Rotary Valve action: {action}")
@@ -476,6 +357,136 @@ class ProgramRunner:
             time.sleep(0.2)
 
     
+    def polynomial_pressure(self, params):
+        """Execute a time-dependent pressure profile, optionally with sensor feedback."""
+        cfg = normalize_polynomial_pressure_params(params)
+        duration = cfg["duration"]
+        if duration <= 0.0:
+            self._log("PolynomialPressure skipped: duration must be greater than 0 s.")
+            return
+
+        sensor_name = cfg["sensor"]
+        closed_loop = not is_open_loop_sensor(sensor_name)
+        previous_target = clamp_pressure(
+            self.gui.get_target_pressure_mbar(),
+            cfg["clamp_min"],
+            cfg["clamp_max"],
+        )
+        previous_command = previous_target
+
+        control_text = "open-loop actuator target"
+        if closed_loop:
+            control_text = (
+                f"closed-loop on {sensor_name}, Kp={cfg['feedback_gain']:g}, "
+                f"max correction={cfg['max_correction']:g} mbar"
+            )
+        self._log(
+            f"PolynomialPressure: {describe_pressure_function(cfg)}, duration {duration:g}s, "
+            f"clamp {cfg['clamp_min']:g}..{cfg['clamp_max']:g} mbar, "
+            f"slew <= {cfg['slew_limit']:g} mbar/s, {control_text}"
+        )
+
+        start = time.monotonic()
+        last_update = start
+        next_log = start
+        sample_count = 0
+        target_clamp_count = 0
+        target_slew_count = 0
+        command_clamp_count = 0
+        command_slew_count = 0
+        final_target = previous_target
+        final_command = previous_command
+
+        while self.running:
+            now = time.monotonic()
+            elapsed = min(now - start, duration)
+            raw_target = evaluate_pressure_target(cfg, elapsed)
+            clamped_target = clamp_pressure(raw_target, cfg["clamp_min"], cfg["clamp_max"])
+            if abs(clamped_target - raw_target) > 1e-9:
+                target_clamp_count += 1
+
+            dt = max(0.0, now - last_update)
+            if sample_count == 0 and cfg["slew_limit"] > 0.0:
+                limited_target = previous_target
+            else:
+                limited_target = apply_slew_limit(clamped_target, previous_target, dt, cfg["slew_limit"])
+            if abs(limited_target - clamped_target) > 1e-9:
+                target_slew_count += 1
+            limited_target = clamp_pressure(limited_target, cfg["clamp_min"], cfg["clamp_max"])
+
+            measured = None
+            correction = 0.0
+            command_target = limited_target
+            if closed_loop:
+                measured = self.get_sensor_value(sensor_name)
+                if measured is None:
+                    self._log(f"PolynomialPressure aborted: pressure sensor {sensor_name} not available.")
+                    return
+                error = limited_target - float(measured)
+                correction = clamp_symmetric(cfg["feedback_gain"] * error, cfg["max_correction"])
+                command_target = limited_target + correction
+
+            clamped_command = clamp_pressure(command_target, cfg["clamp_min"], cfg["clamp_max"])
+            if abs(clamped_command - command_target) > 1e-9:
+                command_clamp_count += 1
+
+            if sample_count == 0 and cfg["slew_limit"] > 0.0:
+                limited_command = previous_command
+            else:
+                limited_command = apply_slew_limit(clamped_command, previous_command, dt, cfg["slew_limit"])
+            if abs(limited_command - clamped_command) > 1e-9:
+                command_slew_count += 1
+            limited_command = clamp_pressure(limited_command, cfg["clamp_min"], cfg["clamp_max"])
+
+            # Plot/export should show the desired pressure curve. The hardware command may
+            # differ in closed-loop mode because it includes the bounded feedback correction.
+            self.gui.target_pressure = limited_target
+            self.gui.pressure_source.setDesiredPressure(limited_command + self.gui.offset)
+
+            previous_target = limited_target
+            previous_command = limited_command
+            final_target = limited_target
+            final_command = limited_command
+            last_update = now
+            sample_count += 1
+
+            if now >= next_log or elapsed >= duration:
+                if closed_loop:
+                    self._log(
+                        f"PolynomialPressure t={elapsed:.2f}s raw={raw_target:.2f} mbar "
+                        f"target={limited_target:.2f} mbar sensor={measured:.2f} mbar "
+                        f"cmd={limited_command:.2f} mbar corr={correction:.2f} mbar"
+                    )
+                else:
+                    self._log(
+                        f"PolynomialPressure t={elapsed:.2f}s raw={raw_target:.2f} mbar "
+                        f"target={limited_target:.2f} mbar"
+                    )
+                next_log = now + 1.0
+
+            if elapsed >= duration:
+                break
+
+            self._sleep_abortable(min(cfg["sample_interval"], duration - elapsed))
+
+        if not self.running:
+            self._log(f"PolynomialPressure aborted at target {final_target:.2f} mbar.")
+            return
+
+        self._log(
+            f"PolynomialPressure finished: {sample_count} setpoints, final target {final_target:.2f} mbar, "
+            f"final command {final_command:.2f} mbar "
+            f"(target clamped {target_clamp_count}x, target slew-limited {target_slew_count}x, "
+            f"command clamped {command_clamp_count}x, command slew-limited {command_slew_count}x)."
+        )
+    def _sleep_abortable(self, seconds, quantum=0.05):
+        """Sleep in short chunks so manual program stop requests are handled promptly."""
+        deadline = time.monotonic() + max(0.0, float(seconds))
+        while self.running:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0.0:
+                break
+            time.sleep(min(float(quantum), remaining))
     def flow_controller(self, params):
         """
         Run the PID-based flow-control step.
@@ -753,6 +764,18 @@ class ProgramRunner:
         except Exception as e:
             self._log(f"Error loading sequence: {str(e)}")
 
+    def _valve_name_from_legacy_number(self, valve_number):
+        """Map old `valve_number` program parameters to the current valve name list."""
+        try:
+            index = int(valve_number) - 1
+        except (TypeError, ValueError):
+            return ""
+
+        available_valves = get_available_valves()
+        if 0 <= index < len(available_valves):
+            return available_valves[index]
+        return ""
+
     def control_valve(self, valve_name, state):
         """
         Control a valve by its editor-visible name.
@@ -781,12 +804,17 @@ class ProgramRunner:
         self._log("All valves closed, pressure set to 0 mbar.")
 
     def export_csv(self, params):
-        folder = params.get(PARAM_FOLDER)
+        folder = params.get(PARAM_FOLDER) or CSVExporter.ensure_measurements_folder()
         prefix = params.get(PARAM_FILENAME_PREFIX, "measurement")
-        if not folder:
-            self._log("No export folder specified.")
+
+        try:
+            os.makedirs(folder, exist_ok=True)
+        except Exception as exc:
+            self._log(f"CSV export failed: could not create folder {folder}: {exc}")
             return
 
         path = CSVExporter.generate_filename(prefix=prefix, folder=folder)
         self.gui.export_csv_from_program(path)
         self._log(f"CSV export saved to:\n{path}")
+
+

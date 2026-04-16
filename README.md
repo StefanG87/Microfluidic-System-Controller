@@ -28,6 +28,7 @@ The main runtime window is `PressureFlowGUI` in `modules/gui_window.py`.
 - `lookup/`: hardware profiles and local preferences
 - `icons/`: GUI icons
 - `Measurements/`: exported measurement files at runtime
+- `test_programs/`: loadable JSON programs for conservative ProgramRunner smoke checks
 - `build/`, `dist/`, `editor/dist/`: generated build artifacts
 
 ## Important architectural notes
@@ -35,7 +36,8 @@ The main runtime window is `PressureFlowGUI` in `modules/gui_window.py`.
 - `modules/gui_window.py` is currently the main orchestration point for UI, hardware lifecycle, buffering, export, and automation startup.
 - `modules/measurement_session.py` owns live measurement buffers and builds CSV export snapshots.
 - `modules/program_contract.py` defines the shared editor/runner step names and parameter keys.
-- `modules/program_runner.py` executes editor-generated JSON steps through narrow runtime methods exposed by the GUI.
+- `modules/program_runner.py` executes editor-generated JSON steps through narrow runtime methods exposed by the GUI, including rotary-valve automation actions.
+- `modules/polynomial_pressure.py` contains shared helpers for polynomial pressure profiles used by the editor preview and runner.
 - Editor task metadata is currently shared through `editor/modules/editor/task_globals.py`.
 - Hardware-facing behavior should be changed conservatively and verified on real equipment.
 
@@ -54,6 +56,8 @@ Start the standalone editor:
 ```bash
 py -3 editor/editor_main.py
 ```
+
+Program-runner smoke tests can be loaded from `test_programs/`. Start with `runner_smoke_safe.json`; review `test_programs/README.md` before enabling inactive hardware-moving steps.
 
 ## Git and GitHub recommendation
 
@@ -76,7 +80,7 @@ Suggested first repository workflow:
 
 ## Current follow-up priorities
 
-- align editor parameters with runtime behavior for `Start Measurement` and `Pressure Ramp`
+- align editor parameters with runtime behavior for `Start Measurement`, `Pressure Ramp`, and `PolynomialPressure`
 - reduce broad `try/except` blocks that currently hide failures
 - replace remaining `sys.path` bootstrapping with a more explicit package layout
 - further separate GUI orchestration from hardware and automation services

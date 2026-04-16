@@ -6,6 +6,7 @@ from functools import partial
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
+from modules.polynomial_pressure import describe_pressure_function, is_open_loop_sensor, normalize_polynomial_pressure_params
 from modules.program_contract import (
     PARAM_ACTION,
     PARAM_CONDITION,
@@ -40,6 +41,7 @@ from modules.program_contract import (
     STEP_LOAD_SEQUENCE,
     STEP_LOOP,
     STEP_PRESSURE_RAMP,
+    STEP_POLYNOMIAL_PRESSURE,
     STEP_ROTARY_VALVE,
     STEP_SET_PRESSURE,
     STEP_START_MEASUREMENT,
@@ -164,6 +166,7 @@ class EditorJobList(QWidget):
             item_layout.addStretch()
 
             if step.type == STEP_FLOW_CONTROLLER:
+
                 pid_button = QPushButton("\U0001F6E0")
                 pid_button.setMaximumWidth(30)
                 pid_button.clicked.connect(partial(self.edit_pid_parameters, step))
@@ -231,6 +234,16 @@ class EditorJobList(QWidget):
                 f"{step.params.get('end_pressure', 100.0)} mbar)"
             )
 
+        if step.type == STEP_POLYNOMIAL_PRESSURE:
+            cfg = normalize_polynomial_pressure_params(step.params)
+            sensor_text = ""
+            if not is_open_loop_sensor(cfg["sensor"]):
+                sensor_text = f", sensor={cfg['sensor']}"
+            return (
+                f"PolynomialPressure ({describe_pressure_function(cfg)}, {cfg['duration']:g}s, "
+                f"clamp {cfg['clamp_min']:g}..{cfg['clamp_max']:g} mbar, "
+                f"slew {cfg['slew_limit']:g} mbar/s{sensor_text})"
+            )
         if step.type == STEP_FLOW_CONTROLLER:
             target_flow = step.params.get(PARAM_TARGET_FLOW, 50.0)
             max_pressure = step.params.get(PARAM_MAX_PRESSURE, 350.0)

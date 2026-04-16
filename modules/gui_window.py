@@ -30,8 +30,10 @@ from modules.rotary_valve_widget import RotaryValveQBox
 from modules.mf_common import (
     log_error, log_info, load_pressure_offset, save_pressure_offset,
     load_last_modbus_ip, save_last_modbus_ip, load_hardware_profile,
-    load_hw_profile_from_prefs, save_hw_profile_to_prefs, list_hw_profiles
+    load_hw_profile_from_prefs, save_hw_profile_to_prefs, list_hw_profiles,
+    load_last_comport, save_last_comport,
 )
+from modules.rvm_dt import list_serial_ports
 
 
 def resource_path(relative_path):
@@ -42,12 +44,21 @@ def resource_path(relative_path):
         base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     return os.path.join(base_path, relative_path)
 
+
+class _GuiCallInvoker(QtCore.QObject):
+    """Signal bridge for running worker-thread requests on the Qt GUI thread."""
+
+    call_requested = QtCore.pyqtSignal(object)
+
+
 class PressureFlowGUI(QWidget):
     def __init__(self):
         super().__init__()
        
         self.program_thread = None
         self.program_worker = None
+        self._gui_call_invoker = _GuiCallInvoker(self)
+        self._gui_call_invoker.call_requested.connect(self._execute_gui_call, Qt.QueuedConnection)
 
         self.setWindowTitle("Microfluidic System Controller")
         
@@ -177,6 +188,31 @@ class PressureFlowGUI(QWidget):
         # Esc -> close the window and trigger closeEvent for a safe shutdown.
         QShortcut(QKeySequence(Qt.Key_Escape), self, activated=self.close)
 
+
+    def _execute_gui_call(self, request):
+        """Execute a queued worker-thread request on the GUI thread."""
+        fn, done, result = request
+        try:
+            result["value"] = fn()
+        except Exception as exc:
+            result["error"] = exc
+        finally:
+            done.set()
+
+    def _call_in_gui_thread(self, fn):
+        """Run `fn` on the GUI thread and return its result to the caller."""
+        if QtCore.QThread.currentThread() == self.thread():
+            return fn()
+
+        from threading import Event
+
+        done = Event()
+        result = {}
+        self._gui_call_invoker.call_requested.emit((fn, done, result))
+        done.wait()
+        if "error" in result:
+            raise result["error"]
+        return result.get("value")
 
     def _bind_measurement_buffers(self):
         """Expose measurement-session buffers through the legacy GUI attributes."""
@@ -752,15 +788,17 @@ class PressureFlowGUI(QWidget):
 
     def start_measurement_from_program(self, sampling_interval_ms=None):
         """Start a measurement from an automation program without user confirmation."""
-        self.start_measurement(automated=True, sampling_interval_ms=sampling_interval_ms)
+        return self._call_in_gui_thread(
+            lambda: self.start_measurement(automated=True, sampling_interval_ms=sampling_interval_ms)
+        )
 
     def stop_measurement_from_program(self):
         """Stop a measurement from an automation program without extra UI prompts."""
-        self.stop_measurement(automated=True)
+        return self._call_in_gui_thread(lambda: self.stop_measurement(automated=True))
 
     def export_csv_from_program(self, path):
         """Run the non-interactive CSV export used by automation programs."""
-        self.do_csv_export(path=path, silent=True)
+        return self._call_in_gui_thread(lambda: self.do_csv_export(path=path, silent=True))
 
     def set_pressure(self):
         try:
@@ -847,7 +885,132 @@ class PressureFlowGUI(QWidget):
         self.is_measuring = False
         if not automated:
             self.append_log("Manual measurement stopped.")
-        self.export_csv()
+            self.export_csv()
+
+    def _invoke_gui(self, fn):
+        """Schedule a small GUI update from automation code."""
+        try:
+            QtCore.QTimer.singleShot(0, fn)
+        except Exception:
+            try:
+                fn()
+            except Exception:
+                pass
+
+    def _get_rotary_box(self):
+        """Return the rotary-valve widget used by the main GUI."""
+        box = getattr(self, "rotaryBox", None)
+        if box is None:
+            raise RuntimeError("Rotary Valve widget not available in GUI.")
+        return box
+
+    def _with_rotary_critical(self, fn):
+        """Pause rotary polling while a blocking serial operation is running."""
+        box = self._get_rotary_box()
+        timer = getattr(box, "timer", None)
+        was_active = bool(timer and timer.isActive())
+        try:
+            if was_active:
+                timer.stop()
+            return fn()
+        finally:
+            if was_active:
+                timer.start()
+
+    def ensure_rotary_connected_from_program(self):
+        """Connect the rotary valve for automation using the same candidates as the GUI."""
+        box = self._get_rotary_box()
+        ctl = box.ctl
+        if ctl.is_connected():
+            return
+
+        tried = set()
+        candidates = []
+
+        com_from_prefs = load_last_comport("rotary_valve") or ""
+        if com_from_prefs and com_from_prefs not in tried:
+            candidates.append(com_from_prefs)
+            tried.add(com_from_prefs)
+
+        try:
+            com_from_gui = box.cmbCom.currentText().strip()
+        except Exception:
+            com_from_gui = ""
+        if com_from_gui and com_from_gui not in tried:
+            candidates.append(com_from_gui)
+            tried.add(com_from_gui)
+
+        for port_name in list_serial_ports():
+            if port_name not in tried:
+                candidates.append(port_name)
+                tried.add(port_name)
+
+        last_error = None
+        positions = box.cmbGoto.count() or 12
+        for port in candidates:
+            try:
+                ctl.connect(port, positions=positions)
+                try:
+                    save_last_comport(port, device_key="rotary_valve")
+                except Exception:
+                    pass
+                return
+            except Exception as exc:
+                last_error = exc
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Unable to connect to the rotary valve.")
+
+    def get_rotary_state_from_program(self):
+        """Return `(num_ports, current_port)` for an automation rotary action."""
+        self.ensure_rotary_connected_from_program()
+        box = self._get_rotary_box()
+        ctl = box.ctl
+        try:
+            num_ports = int(ctl.num_ports())
+        except Exception:
+            num_ports = int(box.cmbGoto.count() or 12)
+        try:
+            current_port = int(ctl.position())
+        except Exception:
+            current_port = 0
+        return num_ports, current_port
+
+    def home_rotary_from_program(self):
+        """Home the rotary valve and synchronize the GUI signals as before."""
+        self.ensure_rotary_connected_from_program()
+        box = self._get_rotary_box()
+        ctl = box.ctl
+        self._invoke_gui(lambda: box.movedStarted.emit(1))
+        self._invoke_gui(lambda: box.show_target(1))
+        self._with_rotary_critical(lambda: ctl.home(wait=True))
+        try:
+            actual = int(ctl.position())
+        except Exception:
+            actual = 0
+        self._invoke_gui(box.sync_active_from_device)
+        self._invoke_gui(box.clear_target)
+        self._invoke_gui(lambda a=actual: box.movedFinished.emit(int(a)))
+
+    def goto_rotary_from_program(self, target, wait=True):
+        """Move the rotary valve to a target port and synchronize GUI state."""
+        self.ensure_rotary_connected_from_program()
+        box = self._get_rotary_box()
+        ctl = box.ctl
+        target = int(target)
+        self._invoke_gui(lambda t=target: box.movedStarted.emit(t))
+        self._invoke_gui(lambda t=target: box.show_target(t))
+        self._with_rotary_critical(lambda: ctl.goto(target, wait=wait))
+
+        if wait:
+            try:
+                actual = int(ctl.position())
+            except Exception:
+                actual = 0
+            self._invoke_gui(box.sync_active_from_device)
+            self._invoke_gui(box.clear_target)
+            self._invoke_gui(lambda a=actual: box.movedFinished.emit(int(a)))
 
     def _snapshot_rotary_active(self) -> int | None:
         """
@@ -1114,6 +1277,10 @@ class PressureFlowGUI(QWidget):
         """
         Run a program from a validated file path, for example from a favorite slot.
         """
+        if self._program_thread_is_running():
+            QMessageBox.warning(self, "Program Running", "Please stop the current program before loading a new one.")
+            return
+
         if not isinstance(path, str) or not os.path.isfile(path):
             QMessageBox.warning(self, "File Not Found", f"The selected file does not exist:\n{path}")
             return
@@ -1128,17 +1295,15 @@ class PressureFlowGUI(QWidget):
         self.program_worker = ProgramWorker(self.program_runner)
         self.program_worker.moveToThread(self.program_thread)
 
-        # Keep the legacy attribute names as aliases while the rest of the GUI
-        # still refers to them implicitly.
-        self.thread = self.program_thread
-        self.worker = self.program_worker
 
         self.program_worker.log_message.connect(self.append_log)
         self.program_worker.finished.connect(self.program_thread.quit)
         self.program_worker.finished.connect(self.program_worker.deleteLater)
         self.program_thread.finished.connect(self.program_thread.deleteLater)
+        self.program_thread.finished.connect(self._clear_program_thread_refs)
         self.program_worker.finished.connect(self.on_program_finished)
         self.program_worker.error.connect(self.handle_program_error)
+        self.program_worker.stopped.connect(self.append_log)
 
         self.program_thread.started.connect(self.program_worker.run)
         self.btn_stop_program.setEnabled(True)
@@ -1148,6 +1313,21 @@ class PressureFlowGUI(QWidget):
         self.program_thread.start()
 
 
+
+
+    def _program_thread_is_running(self):
+        """Return True while a program worker thread is still active."""
+        thread = getattr(self, "program_thread", None)
+        try:
+            return bool(thread is not None and thread.isRunning())
+        except RuntimeError:
+            return False
+
+
+    def _clear_program_thread_refs(self):
+        """Drop stale Qt object references after the worker thread has finished."""
+        self.program_thread = None
+        self.program_worker = None
 
 
     def select_favorite(self, index):
@@ -1191,9 +1371,11 @@ class PressureFlowGUI(QWidget):
         """
         Manually stop the currently running program.
         """
-        if hasattr(self, "program_runner"):
+        if getattr(self, "program_worker", None) is not None:
+            self.program_worker.stop()
+        elif hasattr(self, "program_runner"):
             self.program_runner.stop()
-            self.btn_stop_program.setEnabled(False)
+        self.btn_stop_program.setEnabled(False)
             
     def toggle_log_display(self):
         self.log_visible = not self.log_visible
