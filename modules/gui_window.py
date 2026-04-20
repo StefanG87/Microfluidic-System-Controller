@@ -60,7 +60,7 @@ class PressureFlowGUI(QWidget):
         self._gui_call_invoker = _GuiCallInvoker(self)
         self._gui_call_invoker.call_requested.connect(self._execute_gui_call, Qt.QueuedConnection)
 
-        self.setWindowTitle("µF Controller 2.2")
+        self.setWindowTitle("Microfluidic System Controller")
         
         # --- Initial state ---
         self.offset = load_pressure_offset() 
