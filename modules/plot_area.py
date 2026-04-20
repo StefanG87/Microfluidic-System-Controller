@@ -40,10 +40,11 @@ class PlotArea(QWidget):
         self.ax_pressure = self.figure.add_subplot(111)
         self.ax_flow = self.ax_pressure.twinx()
         self.ax_valves = self.ax_pressure.twinx()
+        self.figure.subplots_adjust(left=0.10, right=0.76, top=0.82, bottom=0.12)
 
         # Place the two right spines
-        self.ax_flow.spines["right"].set_position(("axes", 1.25))
-        self.ax_valves.spines["right"].set_position(("axes", 1.1))
+        self.ax_flow.spines["right"].set_position(("axes", 1.22))
+        self.ax_valves.spines["right"].set_position(("axes", 1.10))
         self.ax_flow.yaxis.set_label_position('right'); self.ax_flow.yaxis.tick_right()
         self.ax_valves.yaxis.set_label_position('right'); self.ax_valves.yaxis.tick_right()
 
@@ -66,7 +67,7 @@ class PlotArea(QWidget):
         # Add every item from the first row without truncating the list.
         for col, lab in enumerate(row0_labels):
             cb = QCheckBox(lab)
-            if lab == "Corrected":
+            if lab in ("Corrected", "Flow 1"):
                 cb.setChecked(True)
             self.checkboxes[lab] = cb
             grid.addWidget(cb, 0, col)
@@ -109,8 +110,8 @@ class PlotArea(QWidget):
         self.ax_flow.clear()
         self.ax_valves.clear()
 
-        self.ax_flow.spines["right"].set_position(("axes", 1.25))
-        self.ax_valves.spines["right"].set_position(("axes", 1.1))
+        self.ax_flow.spines["right"].set_position(("axes", 1.22))
+        self.ax_valves.spines["right"].set_position(("axes", 1.10))
         self.ax_flow.yaxis.set_label_position("right")
         self.ax_flow.yaxis.tick_right()
         self.ax_valves.yaxis.set_label_position("right")
@@ -204,11 +205,15 @@ class PlotArea(QWidget):
                 self._draw_rotary_active_full(time_rel)
     
         # --- Flows ---
-        show_flows = any((cb and cb.isChecked()) for cb in (self.checkboxes.get(f"Flow {i+1}") for i in range(4)))
+        show_flows = any(
+            (cb and cb.isChecked())
+            for cb in (self.checkboxes.get(f"Flow {i+1}") for i in range(4))
+        )
+
         if show_flows:
             self.ax_flow.spines["right"].set_visible(True)
             self.ax_flow.set_ylabel("Flow [uL/min]")
-            self.ax_flow.yaxis.set_label_position('right')
+            self.ax_flow.yaxis.set_label_position("right")
             self.ax_flow.yaxis.tick_right()
             for i in range(4):
                 key = f"Flow {i+1}"
@@ -220,9 +225,9 @@ class PlotArea(QWidget):
                         self.ax_flow.plot(time_rel[:n], values[:n], label=key, color=next(color_cycle))
         else:
             self.ax_flow.spines["right"].set_visible(False)
-            self.ax_flow.set_ylabel("Flow [uL/min]")
+            self.ax_flow.set_ylabel("")
             self.ax_flow.set_yticks([])
-    
+
         # --- Valves ---
         show_valves = any((cb and cb.isChecked()) for cb in (self.checkboxes.get(f"V{i+1}") for i in range(8)))
         if show_valves:
@@ -260,7 +265,7 @@ class PlotArea(QWidget):
                         [self.ax_pressure, self.ax_flow, self.ax_valves]]
         lines, labels = [sum(x, []) for x in zip(*lines_labels)]
         if labels:
-            self.figure.subplots_adjust(top=0.82)
+            self.figure.subplots_adjust(left=0.10, right=0.76, top=0.82, bottom=0.12)
             max_cols = 6
             ncol = min(len(labels), max_cols)
             self.ax_pressure.legend(

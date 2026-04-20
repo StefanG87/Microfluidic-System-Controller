@@ -60,7 +60,7 @@ class PressureFlowGUI(QWidget):
         self._gui_call_invoker = _GuiCallInvoker(self)
         self._gui_call_invoker.call_requested.connect(self._execute_gui_call, Qt.QueuedConnection)
 
-        self.setWindowTitle("Microfluidic System Controller")
+        self.setWindowTitle("µF Controller 2.2")
         
         # --- Initial state ---
         self.offset = load_pressure_offset() 
@@ -141,22 +141,13 @@ class PressureFlowGUI(QWidget):
         self.rotary_is_busy = False
         self.rotary_last_port = None
         
-        # Connect rotary-widget signals
-        if hasattr(self, "rotaryBox"):
-            try:
-                self.rotaryBox.movedStarted.connect(self._on_rotary_started)
-                self.rotaryBox.movedFinished.connect(self._on_rotary_finished)
-            except Exception:
-                pass
-            
         # --- Rotary active-time series for plot bands ---
         self._t0_monotonic = time.monotonic()   # reference for relative seconds
         self.rotary_events = deque(maxlen=20000)  # list of (t_rel_s: float, port: int|0)
         
-        # connect signals
+        # Connect the single rotary signal path used by plot bands and movement gaps.
         self.rotaryBox.activeChanged.connect(self._on_rv_active_changed)
         
-        # OPTIONAL: keep existing starts/finishes for gap logic, but not strictly needed now
         self.rotaryBox.movedStarted.connect(self._on_rv_started)
         self.rotaryBox.movedFinished.connect(self._on_rv_finished)
 
@@ -1026,20 +1017,6 @@ class PressureFlowGUI(QWidget):
             return None
 
 
-    def _on_rotary_started(self, target: int):
-        # The plot gap starts here while the rotary valve is moving.
-        self.rotary_is_busy = True
-        # Optional UI label update example:
-        # if hasattr(self, "lblRotaryStatus"): self.lblRotaryStatus.setText(f"Rotary moving -> {target}")
-    
-    def _on_rotary_finished(self, final_pos: int):
-        # The gap ends here; final_pos may still be 0 if the device state is unknown.
-        self.rotary_is_busy = False
-        if isinstance(final_pos, int) and final_pos > 0:
-            self.rotary_last_port = final_pos
-        # Optional UI label update example:
-        # if hasattr(self, "lblRotaryStatus"): self.lblRotaryStatus.setText(f"Rotary active: {self.rotary_last_port or '-'}")
-
     def _now_rel_s(self) -> float:
         """Return relative time in seconds from the sampling manager for the plot time base."""
         try:
@@ -1074,11 +1051,12 @@ class PressureFlowGUI(QWidget):
 
     
     def _on_rv_started(self, target: int) -> None:
-        """Optional explicit gap marker when movement begins."""
+        """Mark rotary movement so plotting and polling can show a movement gap."""
+        self.rotary_is_busy = True
         if sampling_manager.start_timestamp is None:
             return
         t = self._now_rel_s()
-        # De-duplicate: only push gap if last state wasn't already gap(0)
+        # De-duplicate: only push gap if last state was not already gap(0).
         if not self.rotary_events or int(self.rotary_events[-1][1]) != 0:
             self.rotary_events.append((t, 0))
             try:
@@ -1087,10 +1065,11 @@ class PressureFlowGUI(QWidget):
             except Exception:
                 pass
 
-    
     def _on_rv_finished(self, actual: int) -> None:
         # Usually activeChanged already fired with the same 'actual'.
-        # We can ignore or ensure final sample exists.
+        self.rotary_is_busy = False
+        if actual > 0:
+            self.rotary_last_port = int(actual)
         if actual <= 0:
             return
         t = self._now_rel_s()
@@ -1100,7 +1079,6 @@ class PressureFlowGUI(QWidget):
             self.plot_area.update()
         except Exception:
             pass
-
     def _sync_valve_buttons(self) -> None:
         """Mirror the actual valve states back onto the GUI buttons, including automation changes."""
         mapping = getattr(self, "_valve_btn_by_valve", None)
@@ -1203,7 +1181,7 @@ class PressureFlowGUI(QWidget):
         - If `path` is provided, perform a non-interactive export.
         - If `path` is `None`, open the export dialog.
         """
-        from modules.export_dialog import ExportDialog
+
         from modules.sampling_manager import sampling_manager
     
         # --- Fetch a detached export snapshot from the shared sampling manager ---
