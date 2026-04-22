@@ -21,6 +21,7 @@ The main runtime window is `PressureFlowGUI` in `modules/gui_window.py`. The pro
 
 - `modules/gui_window.py`: main controller window, hardware lifecycle, runtime state, GUI callbacks, and automation bridge methods.
 - `modules/measurement_session.py`: owner for live measurement buffers and export snapshots.
+- `modules/device_catalog.py`: lightweight runtime catalog for editor-visible sensors and actuators.
 - `modules/plot_area.py`: Matplotlib-based live plot widget.
 - `modules/sampling_manager.py`: shared time base and sampling interval dialog.
 - `modules/export_dialog.py`: manual and programmatic CSV writer UI.
@@ -82,6 +83,7 @@ The application is intentionally still a pragmatic lab GUI, not a fully layered 
 Important boundaries now in place:
 
 - Measurement buffers are grouped in `MeasurementSession` instead of being owned only as loose GUI lists.
+- Runtime device names are grouped in `DeviceCatalog` before being published to editor dialogs.
 - Program step names and parameter keys are centralized in `program_contract.py`.
 - Pressure-profile math and preview data are centralized in `polynomial_pressure.py`.
 - Program execution is hosted by `ProgramWorker`, with stale worker-thread references cleaned up after execution.
@@ -96,6 +98,20 @@ Strong couplings that still exist:
 - Editor device availability is still published through mutable module-level state in `task_globals.py`.
 - Import/resource setup still partly depends on startup-time path bootstrapping for local execution and bundled SDK compatibility.
 - Some hardware error paths are intentionally broad to keep the lab GUI alive, but they can hide root causes if logs are not inspected.
+
+## Extension Pattern For New Modules
+
+New hardware modules should be added as narrow runtime adapters first, then exposed through the shared catalog only where needed.
+
+Recommended sequence:
+
+1. Implement the hardware adapter in its own module, for example `syringe_pump.py` or `balance.py`.
+2. Register editor-visible device names in `DeviceCatalog` using a stable role such as `syringe_pump` or `weight`.
+3. Add measurement buffers only if the device produces time-series data that must be plotted or exported.
+4. Add editor/program-contract constants only when the device needs automation steps.
+5. Keep GUI widgets as thin controls around the adapter; avoid embedding protocol logic in `gui_window.py`.
+
+For example, a balance should become a sensor adapter plus a `weight` catalog entry before it becomes a plot or CSV column. A syringe pump should become an actuator adapter plus a `syringe_pump` catalog entry before it gets editor tasks.
 
 ## Hardware Safety Notes
 

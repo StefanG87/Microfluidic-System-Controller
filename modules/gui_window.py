@@ -22,6 +22,12 @@ from modules.export_dialog import ExportDialog
 from modules.sampling_manager import SamplingDialog, sampling_manager
 from modules.flow_sensor import SensirionFlowSensor
 from modules.measurement_session import MeasurementSession
+from modules.device_catalog import (
+    ACTUATOR_KIND_VALVE,
+    DeviceCatalog,
+    SENSOR_KIND_FLOW,
+    SENSOR_KIND_FLUIGENT_PRESSURE,
+)
 from modules.fluigent_wrapper import detect_fluigent_sensors
 from modules.program_runner import ProgramRunner
 from modules.program_worker import ProgramWorker
@@ -72,6 +78,7 @@ class PressureFlowGUI(QWidget):
         # --- Measurement buffers ---
         self.measurement_session = MeasurementSession(flow_channel_count=4)
         self._bind_measurement_buffers()
+        self.device_catalog = DeviceCatalog()
     
         # --- Connect to Modbus ---
         try:
@@ -104,20 +111,16 @@ class PressureFlowGUI(QWidget):
             )
             for i in range(4)
         ]
+        self._register_flow_sensors()
         
         # --- Fluigent sensors ---
         self.fluigent_sensors = detect_fluigent_sensors()
         self.measurement_session.set_fluigent_channel_count(len(self.fluigent_sensors))
         self._bind_measurement_buffers()
+        self._register_fluigent_sensors()
         
         # --- Update the shared editor/runner catalogs ---
-        # Valves: keep the order aligned with _valve_meta / self.valves.
-        update_available_valves([m["editor_name"] for m in self._valve_meta])
-        
-        # Sensors: build and publish the flow + Fluigent list once.
-        self.available_sensors = [f"Flow {i+1}" for i in range(4)]
-        self.available_sensors.extend([f"SN{sensor.device_sn}" for sensor in self.fluigent_sensors])
-        update_available_sensors(self.available_sensors)
+        self._publish_device_catalog()
 
         
         # --- Prepare display widgets ---
@@ -209,6 +212,38 @@ class PressureFlowGUI(QWidget):
         self.abs_time_data = session.abs_time_data
         self.rotary_active = session.rotary_active
 
+    def _publish_device_catalog(self) -> None:
+        """Publish current runtime devices to editor globals without duplicating lists."""
+        update_available_valves(self.device_catalog.valve_names())
+        self.available_sensors = self.device_catalog.sensor_names()
+        update_available_sensors(self.available_sensors)
+
+    def _register_flow_sensors(self) -> None:
+        """Register analog flow channels in the shared device catalog."""
+        self.device_catalog.clear_sensors(SENSOR_KIND_FLOW)
+        for index, sensor in enumerate(self.flow_sensors):
+            self.device_catalog.register_sensor(
+                sensor.name,
+                SENSOR_KIND_FLOW,
+                unit="uL/min",
+                source="modbus",
+                index=index,
+                register=getattr(sensor, "register", None),
+            )
+
+    def _register_fluigent_sensors(self) -> None:
+        """Register detected Fluigent pressure channels in the shared device catalog."""
+        self.device_catalog.clear_sensors(SENSOR_KIND_FLUIGENT_PRESSURE)
+        for index, sensor in enumerate(self.fluigent_sensors):
+            self.device_catalog.register_sensor(
+                f"SN{sensor.device_sn}",
+                SENSOR_KIND_FLUIGENT_PRESSURE,
+                unit="mbar",
+                source="fluigent",
+                index=index,
+                device_sn=getattr(sensor, "device_sn", ""),
+            )
+
     def _connect_modbus_auto(self) -> ModbusTcpClient:
         """
         Try to connect to a Modbus-TCP device by testing a list of candidate IPs.
@@ -288,20 +323,31 @@ class PressureFlowGUI(QWidget):
         """Build valve objects, metadata, and editor catalogs from the active profile."""
         self.valves = []
         self._valve_meta = []
+        self.device_catalog.clear_actuators(ACTUATOR_KIND_VALVE)
         for group in self.hw_profile.get("valve_groups", []):
             for item in group.get("items", []):
                 v = Valve(self.modbus, int(item["coil"]))
                 self.valves.append(v)
-                self._valve_meta.append({
+                meta = {
                     "group": str(item.get("group", "")).lower(),
                     "editor_name": str(item.get("editor_name", "")),
                     "button_label": str(item.get("button_label", "")) or str(item.get("editor_name", "")),
                     "coil": int(item.get("coil", 0)),
                     "box": group.get("box", "Valves"),
-                })
+                }
+                self._valve_meta.append(meta)
+                self.device_catalog.register_actuator(
+                    meta["editor_name"],
+                    ACTUATOR_KIND_VALVE,
+                    source="modbus",
+                    coil=meta["coil"],
+                    group=meta["group"],
+                    button_label=meta["button_label"],
+                    box=meta["box"],
+                )
     
         # Publish the editor-visible valve names in the same order used by the GUI.
-        update_available_valves([m["editor_name"] for m in self._valve_meta])
+        update_available_valves(self.device_catalog.valve_names())
 
     
     def _clear_valve_groups(self) -> None:
@@ -1220,12 +1266,7 @@ class PressureFlowGUI(QWidget):
         """
         from editor_main_embedded import EmbeddedEditorWindow
     
-        device_info = {
-            "valves": len(self.valves),
-            "valve_names": [m["editor_name"] for m in self._valve_meta],
-            "flow_sensors": [fs.name for fs in self.flow_sensors],
-            "fluigent_sensors": [f"SN{fs.device_sn}" for fs in self.fluigent_sensors]
-        }
+        device_info = self.device_catalog.to_embedded_editor_info()
     
         self.editor_window = EmbeddedEditorWindow(device_info)
         self.editor_window.show()

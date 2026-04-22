@@ -39,9 +39,10 @@ class EmbeddedEditorWindow(QWidget):
 
     def override_device_context(self):
         """Publish the currently available sensors and valves for editor dialogs."""
-        sensor_names = []
-        sensor_names.extend(self.device_info.get("flow_sensors", []))
-        sensor_names.extend(self.device_info.get("fluigent_sensors", []))
+        sensor_names = list(self.device_info.get("sensors", []))
+        if not sensor_names:
+            sensor_names.extend(self.device_info.get("flow_sensors", []))
+            sensor_names.extend(self.device_info.get("fluigent_sensors", []))
         if "Internal" not in sensor_names:
             sensor_names.insert(0, "Internal")
 
