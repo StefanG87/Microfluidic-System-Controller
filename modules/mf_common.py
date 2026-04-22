@@ -18,6 +18,12 @@ def _source_root() -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 
+def resource_path(relative_path: str) -> str:
+    """Resolve a resource path for source runs and PyInstaller bundles."""
+    base_path = getattr(sys, "_MEIPASS", None) or _source_root()
+    return os.path.join(base_path, relative_path)
+
+
 def _lookup_dir() -> str:
     """Resolve the lookup folder for source runs and bundled deployments."""
     candidates = []

@@ -31,18 +31,9 @@ from modules.mf_common import (
     log_error, log_info, load_pressure_offset, save_pressure_offset,
     load_last_modbus_ip, save_last_modbus_ip, load_hardware_profile,
     load_hw_profile_from_prefs, save_hw_profile_to_prefs, list_hw_profiles,
-    load_last_comport, save_last_comport,
+    load_last_comport, save_last_comport, resource_path,
 )
 from modules.rvm_dt import list_serial_ports
-
-
-def resource_path(relative_path):
-    """Resolve icons and other bundled resources from the app root."""
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    return os.path.join(base_path, relative_path)
 
 
 class _GuiCallInvoker(QtCore.QObject):

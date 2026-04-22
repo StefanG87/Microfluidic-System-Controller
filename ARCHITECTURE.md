@@ -35,7 +35,7 @@ The main runtime window is `PressureFlowGUI` in `modules/gui_window.py`. The pro
 - `modules/rotary_valve_controller.py`: high-level rotary valve controller.
 - `modules/rotary_valve_widget.py`: rotary valve GUI, polling, and program-runner helper methods.
 - `modules/rvm_dt.py`: low-level AMF RVM DT serial protocol helper.
-- `modules/mf_common.py`: shared preferences, hardware profile loading, small UI helpers, and persistence helpers.
+- `modules/mf_common.py`: shared preferences, resource paths, hardware profile loading, small UI helpers, and persistence helpers.
 
 ### Automation And Editor
 
@@ -87,6 +87,7 @@ Important boundaries now in place:
 - Program execution is hosted by `ProgramWorker`, with stale worker-thread references cleaned up after execution.
 - Rotary-valve program actions go through narrow GUI helper methods so `ProgramRunner` does not manipulate the widget thread internals directly.
 - CSV export path generation is centralized in `CSVExporter`.
+- Icon and bundled-resource lookup is centralized through `mf_common.resource_path()`.
 
 Strong couplings that still exist:
 
@@ -118,5 +119,5 @@ Historical notes are kept for context only and should not be treated as current 
 1. Keep `PressureFlowGUI` as the main window, but move narrow responsibilities into helpers only when that reduces risk.
 2. Keep `program_contract.py` and `polynomial_pressure.py` as the source of truth when new automation parameters are added.
 3. Reduce broad exception swallowing in high-value paths where clearer logging can preserve stability without hiding root causes.
-4. Centralize project-root and resource helpers further if PyInstaller packaging becomes active again.
+4. Keep project-root and resource bootstrapping minimal now that PyInstaller resource lookup has a shared helper.
 5. Consider a small hardware-free runner check only if automation features continue to grow beyond manual validation.

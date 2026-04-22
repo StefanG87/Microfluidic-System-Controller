@@ -265,7 +265,7 @@ class RotaryValveQBox(QtWidgets.QGroupBox):
         self._worker.finished.connect(self._done)
         self._worker.error.connect(self._err)
 
-        # cleanup
+        # Release the one-shot worker objects after the task finishes.
         self._worker.finished.connect(self._worker_thread.quit)
         self._worker.error.connect(self._worker_thread.quit)
         self._worker.finished.connect(self._worker.deleteLater)
