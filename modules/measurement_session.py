@@ -22,6 +22,7 @@ class ExportSnapshot:
     valve_names: list | None = None
     profile_name: str | None = None
     valve_coils: list | None = None
+    extra_series: list | None = None
 
     def with_metadata(self, offset=0.0, valve_names=None, profile_name=None, valve_coils=None):
         """Attach export metadata that lives outside the measurement buffers."""
@@ -57,6 +58,8 @@ class MeasurementSession:
         self.valve_states = []
         self.flow_data = [deque() for _ in range(flow_channel_count)]
         self.fluigent_pressure_data = [deque() for _ in range(fluigent_channel_count)]
+        self.extra_series = {}
+        self.extra_series_units = {}
         self.abs_time_data = []
         self.rotary_active = []
 
@@ -80,6 +83,8 @@ class MeasurementSession:
             channel.clear()
         for channel in self.fluigent_pressure_data:
             channel.clear()
+        for values in self.extra_series.values():
+            values.clear()
         self.abs_time_data.clear()
         self.rotary_active.clear()
 
@@ -105,6 +110,34 @@ class MeasurementSession:
     def append_fluigent_pressure_value(self, channel_index, value):
         """Record one Fluigent pressure value for the current sample."""
         self.fluigent_pressure_data[channel_index].append(value)
+
+    def register_extra_series(self, name, unit=""):
+        """Register a generic measurement channel for future CSV export."""
+        clean_name = str(name).strip()
+        if not clean_name:
+            raise ValueError("Extra series name must not be empty.")
+
+        if clean_name not in self.extra_series:
+            self.extra_series[clean_name] = deque()
+        self.extra_series_units[clean_name] = str(unit or "").strip()
+
+    def append_extra_value(self, name, value):
+        """Append one value to a generic measurement channel."""
+        clean_name = str(name).strip()
+        if clean_name not in self.extra_series:
+            self.register_extra_series(clean_name)
+        self.extra_series[clean_name].append(value)
+
+    def snapshot_extra_series(self):
+        """Return generic measurement channels in registration order."""
+        return [
+            {
+                "name": name,
+                "unit": self.extra_series_units.get(name, ""),
+                "values": list(values),
+            }
+            for name, values in self.extra_series.items()
+        ]
 
     def append_rotary_active(self, active_port):
         """Record the sampled rotary-valve active port for the current sample."""
@@ -132,4 +165,5 @@ class MeasurementSession:
             sampling_interval_ms=sampling_interval_ms,
             start_timestamp=start_timestamp,
             rotary_active=list(self.rotary_active),
+            extra_series=self.snapshot_extra_series(),
         )

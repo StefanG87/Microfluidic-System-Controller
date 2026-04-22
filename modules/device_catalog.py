@@ -13,6 +13,16 @@ SENSOR_KIND_WEIGHT = "weight"
 ACTUATOR_KIND_VALVE = "valve"
 ACTUATOR_KIND_SYRINGE_PUMP = "syringe_pump"
 
+SENSOR_KIND_ORDER = (
+    SENSOR_KIND_FLOW,
+    SENSOR_KIND_FLUIGENT_PRESSURE,
+    SENSOR_KIND_WEIGHT,
+)
+ACTUATOR_KIND_ORDER = (
+    ACTUATOR_KIND_VALVE,
+    ACTUATOR_KIND_SYRINGE_PUMP,
+)
+
 
 @dataclass(frozen=True)
 class SensorDescriptor:
@@ -49,6 +59,22 @@ class DeviceCatalog:
         if isinstance(kinds, str):
             return {kinds}
         return {str(kind) for kind in kinds}
+
+    @staticmethod
+    def _ordered_by_kind(entries, kind_order):
+        """Group known device kinds without disturbing registration order within a kind."""
+        kind_rank = {kind: index for index, kind in enumerate(kind_order)}
+        fallback_rank = len(kind_rank)
+        return [
+            entry
+            for _, entry in sorted(
+                enumerate(entries),
+                key=lambda item: (
+                    kind_rank.get(item[1].kind, fallback_rank),
+                    item[0],
+                ),
+            )
+        ]
 
     def clear_sensors(self, kind: str | Iterable[str] | None = None) -> None:
         """Remove sensor descriptors, optionally restricted to one or more kinds."""
@@ -108,23 +134,33 @@ class DeviceCatalog:
         self._actuators.append(descriptor)
         return descriptor
 
-    def sensor_names(self, kind: str | Iterable[str] | None = None) -> list[str]:
-        """Return sensor names in registration order."""
+    def sensors(self, kind: str | Iterable[str] | None = None) -> list[SensorDescriptor]:
+        """Return sensor descriptors in a stable, UI-friendly order."""
         kinds = self._kind_set(kind)
-        return [
-            sensor.name
+        sensors = [
+            sensor
             for sensor in self._sensors
             if kinds is None or sensor.kind in kinds
         ]
+        return self._ordered_by_kind(sensors, SENSOR_KIND_ORDER)
 
-    def actuator_names(self, kind: str | Iterable[str] | None = None) -> list[str]:
-        """Return actuator names in registration order."""
+    def actuators(self, kind: str | Iterable[str] | None = None) -> list[ActuatorDescriptor]:
+        """Return actuator descriptors in a stable, UI-friendly order."""
         kinds = self._kind_set(kind)
-        return [
-            actuator.name
+        actuators = [
+            actuator
             for actuator in self._actuators
             if kinds is None or actuator.kind in kinds
         ]
+        return self._ordered_by_kind(actuators, ACTUATOR_KIND_ORDER)
+
+    def sensor_names(self, kind: str | Iterable[str] | None = None) -> list[str]:
+        """Return sensor names in the same order as the descriptor view."""
+        return [sensor.name for sensor in self.sensors(kind)]
+
+    def actuator_names(self, kind: str | Iterable[str] | None = None) -> list[str]:
+        """Return actuator names in the same order as the descriptor view."""
+        return [actuator.name for actuator in self.actuators(kind)]
 
     def valve_names(self) -> list[str]:
         """Return valves in the order used by the GUI and automation runner."""

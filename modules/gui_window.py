@@ -244,6 +244,69 @@ class PressureFlowGUI(QWidget):
                 device_sn=getattr(sensor, "device_sn", ""),
             )
 
+    def _refresh_sensor_value_labels(self) -> None:
+        """Rebuild the live sensor-value labels from the runtime device catalog."""
+        if not hasattr(self, "sensor_layout"):
+            return
+
+        while self.sensor_layout.count():
+            item = self.sensor_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        self.sensor_labels = {}
+        for sensor in self.device_catalog.sensors():
+            suffix = f" {sensor.unit}" if sensor.unit else ""
+            label = QLabel(f"{sensor.name}: --{suffix}")
+            self.sensor_labels[sensor.name] = label
+            self.sensor_layout.addWidget(label)
+
+    def update_device_config(self) -> None:
+        """Refresh detectable devices without changing active hardware output states."""
+        if self.is_measuring or self.program_thread is not None:
+            QMessageBox.warning(
+                self,
+                "Config Update",
+                "Stop the current measurement or program before updating the device config.",
+            )
+            return
+
+        old_sensors = set(self.device_catalog.sensor_names())
+        try:
+            self.fluigent_sensors = detect_fluigent_sensors()
+            self.measurement_session.set_fluigent_channel_count(len(self.fluigent_sensors))
+            self._bind_measurement_buffers()
+            self._register_flow_sensors()
+            self._register_fluigent_sensors()
+            self._publish_device_catalog()
+            self._refresh_sensor_value_labels()
+
+            if hasattr(self, "plot_area"):
+                if hasattr(self.plot_area, "refresh_fluigent_sensors"):
+                    self.plot_area.refresh_fluigent_sensors(
+                        self.fluigent_sensors,
+                        self.fluigent_pressure_data,
+                    )
+                else:
+                    self.plot_area.fluigent_sensors = self.fluigent_sensors
+                    self.plot_area.fluigent_pressure_data = self.fluigent_pressure_data
+
+            new_sensors = set(self.device_catalog.sensor_names())
+            added = sorted(new_sensors - old_sensors)
+            removed = sorted(old_sensors - new_sensors)
+            details = []
+            if added:
+                details.append(f"added: {', '.join(added)}")
+            if removed:
+                details.append(f"removed: {', '.join(removed)}")
+            summary = "; ".join(details) if details else "no sensor changes detected"
+            message = f"Device config refreshed ({summary})."
+            self.append_log(message)
+            QMessageBox.information(self, "Config Update", message)
+        except Exception as e:
+            log_error(f"Device config refresh failed: {e}", display_ui=True, parent=self)
+
     def _connect_modbus_auto(self) -> ModbusTcpClient:
         """
         Try to connect to a Modbus-TCP device by testing a list of candidate IPs.
@@ -441,6 +504,11 @@ class PressureFlowGUI(QWidget):
         self.btn_sampling.setToolTip("Set sampling interval")
         self.btn_sampling.clicked.connect(self.open_sampling_dialog)
         toolbar.addWidget(self.btn_sampling)
+
+        self.btn_update_config = QPushButton("Update Config")
+        self.btn_update_config.setToolTip("Refresh detected sensors and editor device lists")
+        self.btn_update_config.clicked.connect(self.update_device_config)
+        toolbar.addWidget(self.btn_update_config)
         
         # --- Profile selector on the right side of the toolbar ---
         from PyQt5.QtWidgets import QComboBox
@@ -503,17 +571,7 @@ class PressureFlowGUI(QWidget):
         self.sensor_labels = {}
         self.sensor_display = QGroupBox("Sensor Values")
         self.sensor_layout = QVBoxLayout()
-    
-        for i in range(4):
-            label = QLabel(f"Flow {i+1}: -- uL/min")
-            self.sensor_labels[f"Flow {i+1}"] = label
-            self.sensor_layout.addWidget(label)
-    
-        for sensor in self.fluigent_sensors:
-            sn = f"SN{sensor.device_sn}"
-            label = QLabel(f"{sn}: -- mbar")
-            self.sensor_labels[sn] = label
-            self.sensor_layout.addWidget(label)
+        self._refresh_sensor_value_labels()
     
         self.sensor_display.setLayout(self.sensor_layout)
         control_layout.addWidget(self.sensor_display)

@@ -20,12 +20,12 @@ The main runtime window is `PressureFlowGUI` in `modules/gui_window.py`. The pro
 ### GUI And Orchestration
 
 - `modules/gui_window.py`: main controller window, hardware lifecycle, runtime state, GUI callbacks, and automation bridge methods.
-- `modules/measurement_session.py`: owner for live measurement buffers and export snapshots.
+- `modules/measurement_session.py`: owner for live measurement buffers, generic extra measurement series, and export snapshots.
 - `modules/device_catalog.py`: lightweight runtime catalog for editor-visible sensors and actuators.
 - `modules/plot_area.py`: Matplotlib-based live plot widget.
 - `modules/sampling_manager.py`: shared time base and sampling interval dialog.
 - `modules/export_dialog.py`: manual and programmatic CSV writer UI.
-- `modules/csv_exporter.py`: default export folder and timestamped filename helpers.
+- `modules/csv_exporter.py`: default export folder, timestamped filename helpers, and CSV column generation for built-in and generic measurement series.
 
 ### Hardware Interfaces
 
@@ -83,7 +83,9 @@ The application is intentionally still a pragmatic lab GUI, not a fully layered 
 Important boundaries now in place:
 
 - Measurement buffers are grouped in `MeasurementSession` instead of being owned only as loose GUI lists.
+- Generic future measurement channels can be registered in `MeasurementSession` as named extra series so they become CSV columns without changing the established pressure/flow/valve export format.
 - Runtime device names are grouped in `DeviceCatalog` before being published to editor dialogs.
+- The main GUI `Update Config` button refreshes detected sensors and editor-visible device lists only when no measurement or program is active.
 - Program step names and parameter keys are centralized in `program_contract.py`.
 - Pressure-profile math and preview data are centralized in `polynomial_pressure.py`.
 - Program execution is hosted by `ProgramWorker`, with stale worker-thread references cleaned up after execution.
@@ -111,7 +113,7 @@ Recommended sequence:
 4. Add editor/program-contract constants only when the device needs automation steps.
 5. Keep GUI widgets as thin controls around the adapter; avoid embedding protocol logic in `gui_window.py`.
 
-For example, a balance should become a sensor adapter plus a `weight` catalog entry before it becomes a plot or CSV column. A syringe pump should become an actuator adapter plus a `syringe_pump` catalog entry before it gets editor tasks.
+For example, a balance should become a sensor adapter plus a `weight` catalog entry before it becomes a plot or CSV column. Once it produces live values, register a named extra series in `MeasurementSession` so the CSV exporter can add a stable `Weight [...]` column. A syringe pump should become an actuator adapter plus a `syringe_pump` catalog entry before it gets editor tasks.
 
 ## Hardware Safety Notes
 

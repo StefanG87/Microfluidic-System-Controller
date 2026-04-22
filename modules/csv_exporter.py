@@ -49,6 +49,31 @@ class CSVExporter:
         return [f"Pressure {i+1} [mbar]" for i in range(len(fluigent_data))]
 
     @staticmethod
+    def _series_attr(series, key, default=None):
+        """Read one generic-series field from dict-like or object-like metadata."""
+        if isinstance(series, dict):
+            return series.get(key, default)
+        return getattr(series, key, default)
+
+    @staticmethod
+    def _extra_series_header(extra_series):
+        """Return CSV labels for generic future measurement channels."""
+        labels = []
+        for series in extra_series:
+            name = str(CSVExporter._series_attr(series, "name", "")).strip()
+            unit = str(CSVExporter._series_attr(series, "unit", "") or "").strip()
+            if not name:
+                continue
+            labels.append(f"{name} [{unit}]" if unit else name)
+        return labels
+
+    @staticmethod
+    def _extra_series_values(series):
+        """Return generic-series values as a list."""
+        values = CSVExporter._series_attr(series, "values", [])
+        return list(values) if values is not None else []
+
+    @staticmethod
     def write_measurement_csv(
         path,
         *,
@@ -67,12 +92,18 @@ class CSVExporter:
         profile_name=None,
         valve_coils=None,
         fluigent_sensors=None,
+        extra_series=None,
     ):
         """Write one complete measurement export to `path` using the established CSV format."""
         rotary_active = rotary_active or []
         valve_names = list(valve_names) if valve_names else None
         valve_coils = list(valve_coils) if valve_coils else None
         fluigent_sensors = list(fluigent_sensors) if fluigent_sensors else []
+        extra_series = [
+            series
+            for series in (list(extra_series) if extra_series else [])
+            if str(CSVExporter._series_attr(series, "name", "")).strip()
+        ]
 
         with open(path, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f, delimiter=";")
@@ -100,6 +131,7 @@ class CSVExporter:
 
             header += [f"Flow {i+1} [uL/min]" for i in range(len(flow_data))]
             header += CSVExporter._fluigent_header(fluigent_sensors, fluigent_data)
+            header += CSVExporter._extra_series_header(extra_series)
             header.append("Rotary Active")
             writer.writerow(header)
 
@@ -125,6 +157,10 @@ class CSVExporter:
                     CSVExporter._decimal_text(fluigent_data[j][i] if i < len(fluigent_data[j]) else 0.0)
                     for j in range(len(fluigent_data))
                 ]
+                for series in extra_series:
+                    values = CSVExporter._extra_series_values(series)
+                    value = values[i] if i < len(values) else ""
+                    row.append(CSVExporter._decimal_text(value) if value not in ("", None) else "")
 
                 if rotary_active and i < len(rotary_active):
                     rv = rotary_active[i]

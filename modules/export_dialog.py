@@ -54,6 +54,9 @@ class ExportDialog(QDialog):
             valve_names = snapshot.valve_names
             profile_name = snapshot.profile_name
             valve_coils = snapshot.valve_coils
+            extra_series = snapshot.extra_series or []
+        else:
+            extra_series = []
 
         self.time_data = time_data or []
         self.target = target or []
@@ -73,6 +76,7 @@ class ExportDialog(QDialog):
         self.profile_name = str(profile_name) if profile_name else None
         self.valve_coils = list(valve_coils) if valve_coils else None
         self.fluigent_sensors = parent.fluigent_sensors if hasattr(parent, "fluigent_sensors") else []
+        self.extra_series = extra_series
 
         btn = QPushButton("Save CSV")
         btn.clicked.connect(self.save_csv)
@@ -120,6 +124,7 @@ class ExportDialog(QDialog):
                 profile_name=self.profile_name,
                 valve_coils=self.valve_coils,
                 fluigent_sensors=self.fluigent_sensors,
+                extra_series=self.extra_series,
             )
 
             if not silent and self.isVisible():

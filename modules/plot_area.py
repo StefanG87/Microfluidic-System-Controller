@@ -55,6 +55,7 @@ class PlotArea(QWidget):
         
         self.checkboxes = {}
         grid = QGridLayout()
+        self.checkbox_grid = grid
         
         # Row 1: Target / Corrected / Measured / Rotary / Flows / Fluigent
         row0_labels = ["Target", "Corrected", "Measured", "Rotary"]
@@ -62,6 +63,8 @@ class PlotArea(QWidget):
         row0_labels += [f"SN{sensor.device_sn}" for sensor in self.fluigent_sensors]
         # Choose enough columns so the full first row fits (at least 10).
         COLS = max(10, len(row0_labels))
+        self.checkbox_columns = COLS
+        self.sensor_checkbox_count = len(row0_labels)
         for c in range(COLS):
             grid.setColumnStretch(c, 1)
         # Add every item from the first row without truncating the list.
@@ -103,6 +106,27 @@ class PlotArea(QWidget):
     def set_rotary_events(self, events_deque):
         """Attach the (t, port) event deque used to render rotary bands."""
         self.rotary_events = events_deque
+
+    def refresh_fluigent_sensors(self, fluigent_sensors, fluigent_pressure_data):
+        """Attach refreshed Fluigent buffers and add checkboxes for new channels."""
+        self.fluigent_sensors = fluigent_sensors
+        self.fluigent_pressure_data = fluigent_pressure_data
+
+        for sensor in self.fluigent_sensors:
+            label = f"SN{sensor.device_sn}"
+            if label in self.checkboxes:
+                continue
+
+            cb = QCheckBox(label)
+            self.checkboxes[label] = cb
+            col = self.sensor_checkbox_count
+            self.sensor_checkbox_count += 1
+            if col >= self.checkbox_columns:
+                self.checkbox_columns = col + 1
+                self.checkbox_grid.setColumnStretch(col, 1)
+            self.checkbox_grid.addWidget(cb, 0, col)
+
+        self.canvas.draw_idle()
 
     def _clear_axes(self):
         """Reset the three axes while keeping the spine layout consistent."""
