@@ -4,6 +4,8 @@ import csv
 import os
 from datetime import datetime
 
+from modules.mf_common import writable_app_root
+
 
 class CSVExporter:
     """Create stable CSV file paths and write measurement CSV files."""
@@ -29,9 +31,8 @@ class CSVExporter:
 
     @staticmethod
     def ensure_measurements_folder():
-        """Create and return the default Measurements folder at the project root."""
-        base_path = os.path.dirname(os.path.abspath(__file__))
-        measurements_folder = os.path.join(os.path.abspath(os.path.join(base_path, "..")), "Measurements")
+        """Create and return the default Measurements folder for the active runtime."""
+        measurements_folder = os.path.join(writable_app_root(), "Measurements")
         os.makedirs(measurements_folder, exist_ok=True)
         return measurements_folder
 

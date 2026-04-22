@@ -24,6 +24,13 @@ def resource_path(relative_path: str) -> str:
     return os.path.join(base_path, relative_path)
 
 
+def writable_app_root() -> str:
+    """Return the stable folder for runtime outputs such as measurements."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return _source_root()
+
+
 def _lookup_dir() -> str:
     """Resolve the lookup folder for source runs and bundled deployments."""
     candidates = []

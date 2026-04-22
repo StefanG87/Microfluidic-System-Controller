@@ -35,7 +35,7 @@ The main runtime window is `PressureFlowGUI` in `modules/gui_window.py`. The pro
 - `modules/rotary_valve_controller.py`: high-level rotary valve controller.
 - `modules/rotary_valve_widget.py`: rotary valve GUI, polling, and program-runner helper methods.
 - `modules/rvm_dt.py`: low-level AMF RVM DT serial protocol helper.
-- `modules/mf_common.py`: shared preferences, resource paths, hardware profile loading, small UI helpers, and persistence helpers.
+- `modules/mf_common.py`: shared preferences, resource/output paths, hardware profile loading, small UI helpers, and persistence helpers.
 
 ### Automation And Editor
 
@@ -88,6 +88,7 @@ Important boundaries now in place:
 - Rotary-valve program actions go through narrow GUI helper methods so `ProgramRunner` does not manipulate the widget thread internals directly.
 - CSV export path generation is centralized in `CSVExporter`.
 - Icon and bundled-resource lookup is centralized through `mf_common.resource_path()`.
+- Runtime output root selection for source runs and EXE builds is centralized through `mf_common.writable_app_root()`.
 
 Strong couplings that still exist:
 
