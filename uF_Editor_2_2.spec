@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['main_gui.py'],
+    ['editor\\editor_main.py'],
     pathex=[],
     binaries=[],
     datas=[('icons', 'icons'), ('modules', 'modules'), ('editor', 'editor'), ('lookup', 'lookup')],
@@ -21,7 +21,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='MicrofluidicSystemController',
+    name='uF_Editor_2_2',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -32,6 +32,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['editor\\icons\\MFEditor.ico'],
 )
 coll = COLLECT(
     exe,
@@ -40,5 +41,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='MicrofluidicSystemController',
+    name='uF_Editor_2_2',
 )

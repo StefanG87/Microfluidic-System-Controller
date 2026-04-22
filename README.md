@@ -58,6 +58,21 @@ Start the standalone editor:
 py -3 editor/editor_main.py
 ```
 
+## Building Windows EXEs
+
+The repository includes PyInstaller specs for the controller and standalone editor:
+
+```bash
+build_all_exe.bat
+```
+
+The build script expects the `mf_controller_build` conda environment and uses:
+
+- `uF_Controller_2_2.spec`
+- `uF_Editor_2_2.spec`
+
+Generated `build/` and `dist/` folders are ignored by Git.
+
 Before using a changed version on the lab setup, run through the manual checks in `TESTING.md`.
 
 ## Repository Workflow
