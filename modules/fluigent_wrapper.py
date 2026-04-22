@@ -1,7 +1,5 @@
 ﻿"""Helpers for Fluigent pressure sensor discovery and readout."""
 
-import ctypes
-
 FLUIGENT_SDK_AVAILABLE = True
 FLUIGENT_SDK_IMPORT_ERROR = None
 
@@ -42,7 +40,6 @@ class FluigentPressureSensor:
         if not FLUIGENT_SDK_AVAILABLE or fgt_get_sensorValue is None:
             return None
 
-        pressure_value = ctypes.c_float()
         error_code = fgt_get_sensorValue(self.index)
         if error_code is None:
             print(f"[Fluigent] Error reading sensor {self.device_sn} (index: {self.index})")
@@ -57,12 +54,26 @@ class FluigentPressureSensor:
             print(f"[Fluigent] Sensor {self.device_sn} zeroed (software). Offset: {self.offset:.2f} mbar")
 
 
-def detect_fluigent_sensors():
+def _close_fluigent_sdk():
+    """Close the Fluigent SDK connection when a fresh device scan is required."""
+    if fgt_close is None:
+        return
+
+    try:
+        fgt_close()
+    except Exception as e:
+        print(f"[Fluigent] Failed to close SDK before refresh: {e}")
+
+
+def detect_fluigent_sensors(force_reinit=False):
     """Initialize the Fluigent SDK and return the detected pressure sensors."""
     if not FLUIGENT_SDK_AVAILABLE or fgt_init is None or fgt_get_sensorChannelsInfo is None:
         if FLUIGENT_SDK_IMPORT_ERROR is not None:
             print(f"[Fluigent] SDK not available: {FLUIGENT_SDK_IMPORT_ERROR}")
         return []
+
+    if force_reinit:
+        _close_fluigent_sdk()
 
     fgt_init()
     sensors = []

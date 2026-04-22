@@ -108,7 +108,16 @@ class PlotArea(QWidget):
         self.rotary_events = events_deque
 
     def refresh_fluigent_sensors(self, fluigent_sensors, fluigent_pressure_data):
-        """Attach refreshed Fluigent buffers and add checkboxes for new channels."""
+        """Attach refreshed Fluigent buffers and sync checkboxes with detected channels."""
+        old_labels = {f"SN{sensor.device_sn}" for sensor in self.fluigent_sensors}
+        new_labels = {f"SN{sensor.device_sn}" for sensor in fluigent_sensors}
+
+        for label in sorted(old_labels - new_labels):
+            checkbox = self.checkboxes.pop(label, None)
+            if checkbox is not None:
+                self.checkbox_grid.removeWidget(checkbox)
+                checkbox.deleteLater()
+
         self.fluigent_sensors = fluigent_sensors
         self.fluigent_pressure_data = fluigent_pressure_data
 

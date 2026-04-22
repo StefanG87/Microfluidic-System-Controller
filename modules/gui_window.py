@@ -289,7 +289,14 @@ class PressureFlowGUI(QWidget):
 
         old_sensors = set(self.device_catalog.sensor_names())
         try:
-            self.fluigent_sensors = detect_fluigent_sensors()
+            previous_offsets = {
+                str(sensor.device_sn): getattr(sensor, "offset", 0.0)
+                for sensor in self.fluigent_sensors
+            }
+            self.fluigent_sensors = detect_fluigent_sensors(force_reinit=True)
+            for sensor in self.fluigent_sensors:
+                sensor.offset = previous_offsets.get(str(sensor.device_sn), sensor.offset)
+
             self.measurement_session.set_fluigent_channel_count(len(self.fluigent_sensors))
             self._bind_measurement_buffers()
             self._register_pressure_controller()
