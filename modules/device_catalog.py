@@ -8,18 +8,24 @@ from typing import Any, Iterable
 
 SENSOR_KIND_FLOW = "flow"
 SENSOR_KIND_FLUIGENT_PRESSURE = "fluigent_pressure"
+SENSOR_KIND_INTERNAL_PRESSURE = "internal_pressure"
 SENSOR_KIND_WEIGHT = "weight"
 
+ACTUATOR_KIND_PRESSURE_CONTROLLER = "pressure_controller"
+ACTUATOR_KIND_ROTARY_VALVE = "rotary_valve"
 ACTUATOR_KIND_VALVE = "valve"
 ACTUATOR_KIND_SYRINGE_PUMP = "syringe_pump"
 
 SENSOR_KIND_ORDER = (
+    SENSOR_KIND_INTERNAL_PRESSURE,
     SENSOR_KIND_FLOW,
     SENSOR_KIND_FLUIGENT_PRESSURE,
     SENSOR_KIND_WEIGHT,
 )
 ACTUATOR_KIND_ORDER = (
+    ACTUATOR_KIND_PRESSURE_CONTROLLER,
     ACTUATOR_KIND_VALVE,
+    ACTUATOR_KIND_ROTARY_VALVE,
     ACTUATOR_KIND_SYRINGE_PUMP,
 )
 
@@ -114,6 +120,13 @@ class DeviceCatalog:
         self._sensors.append(descriptor)
         return descriptor
 
+    def register_sensor_descriptor(self, descriptor: SensorDescriptor | None) -> SensorDescriptor | None:
+        """Register a prebuilt sensor descriptor from a runtime adapter."""
+        if descriptor is None or not str(descriptor.name).strip():
+            return None
+        self._sensors.append(descriptor)
+        return descriptor
+
     def register_actuator(
         self,
         name: str,
@@ -131,6 +144,13 @@ class DeviceCatalog:
             source=str(source or ""),
             metadata=dict(metadata),
         )
+        self._actuators.append(descriptor)
+        return descriptor
+
+    def register_actuator_descriptor(self, descriptor: ActuatorDescriptor | None) -> ActuatorDescriptor | None:
+        """Register a prebuilt actuator descriptor from a runtime adapter."""
+        if descriptor is None or not str(descriptor.name).strip():
+            return None
         self._actuators.append(descriptor)
         return descriptor
 
@@ -173,6 +193,93 @@ class DeviceCatalog:
             "valves": len(valve_names),
             "valve_names": valve_names,
             "sensors": self.sensor_names(),
+            "actuators": self.actuator_names(),
             "flow_sensors": self.sensor_names(SENSOR_KIND_FLOW),
             "fluigent_sensors": self.sensor_names(SENSOR_KIND_FLUIGENT_PRESSURE),
         }
+
+
+def describe_internal_pressure_sensor(controller=None) -> SensorDescriptor:
+    """Describe the pressure controller monitor as an editor-visible sensor."""
+    return SensorDescriptor(
+        name="Internal",
+        kind=SENSOR_KIND_INTERNAL_PRESSURE,
+        unit="mbar",
+        source="pressure_controller",
+        metadata={
+            "register": getattr(controller, "register", None),
+        },
+    )
+
+
+def describe_pressure_controller(controller=None) -> ActuatorDescriptor:
+    """Describe the pressure controller as a runtime actuator."""
+    return ActuatorDescriptor(
+        name="Pressure Controller",
+        kind=ACTUATOR_KIND_PRESSURE_CONTROLLER,
+        source="modbus",
+        metadata={
+            "register": getattr(controller, "register", None),
+            "pmin": getattr(controller, "pmin", None),
+            "pmax": getattr(controller, "pmax", None),
+        },
+    )
+
+
+def describe_flow_sensor(sensor, index: int) -> SensorDescriptor:
+    """Describe one analog flow channel using metadata from its runtime object."""
+    return SensorDescriptor(
+        name=str(getattr(sensor, "name", f"Flow {index + 1}")),
+        kind=SENSOR_KIND_FLOW,
+        unit="uL/min",
+        source="modbus",
+        metadata={
+            "index": index,
+            "register": getattr(sensor, "register", None),
+            "flow_min": getattr(sensor, "flow_min", None),
+            "flow_max": getattr(sensor, "flow_max", None),
+        },
+    )
+
+
+def describe_fluigent_sensor(sensor, index: int) -> SensorDescriptor:
+    """Describe one Fluigent pressure sensor channel."""
+    device_sn = str(getattr(sensor, "device_sn", ""))
+    return SensorDescriptor(
+        name=f"SN{device_sn}" if device_sn else f"Fluigent {index + 1}",
+        kind=SENSOR_KIND_FLUIGENT_PRESSURE,
+        unit="mbar",
+        source="fluigent",
+        metadata={
+            "index": index,
+            "device_sn": device_sn,
+        },
+    )
+
+
+def describe_valve(meta: dict) -> ActuatorDescriptor:
+    """Describe one profile-defined valve without leaking GUI layout details."""
+    return ActuatorDescriptor(
+        name=str(meta.get("editor_name", "")),
+        kind=ACTUATOR_KIND_VALVE,
+        source="modbus",
+        metadata={
+            "coil": meta.get("coil"),
+            "group": meta.get("group"),
+            "button_label": meta.get("button_label"),
+            "box": meta.get("box"),
+        },
+    )
+
+
+def describe_rotary_valve(widget=None) -> ActuatorDescriptor:
+    """Describe the rotary valve UI/controller stack as one runtime actuator."""
+    controller = getattr(widget, "ctl", None)
+    return ActuatorDescriptor(
+        name="Rotary Valve",
+        kind=ACTUATOR_KIND_ROTARY_VALVE,
+        source="serial",
+        metadata={
+            "connected": bool(controller.is_connected()) if controller is not None else False,
+        },
+    )

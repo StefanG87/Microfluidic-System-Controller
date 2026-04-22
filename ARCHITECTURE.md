@@ -84,7 +84,7 @@ Important boundaries now in place:
 
 - Measurement buffers are grouped in `MeasurementSession` instead of being owned only as loose GUI lists.
 - Generic future measurement channels can be registered in `MeasurementSession` as named extra series so they become CSV columns without changing the established pressure/flow/valve export format.
-- Runtime device names are grouped in `DeviceCatalog` before being published to editor dialogs.
+- Runtime device names are grouped in `DeviceCatalog` before being published to editor dialogs. Existing hardware modules expose catalog descriptors through this central layer instead of duplicating device metadata in the GUI.
 - The main GUI `Update Config` button refreshes detected sensors and editor-visible device lists only when no measurement or program is active.
 - Program step names and parameter keys are centralized in `program_contract.py`.
 - Pressure-profile math and preview data are centralized in `polynomial_pressure.py`.
@@ -103,15 +103,16 @@ Strong couplings that still exist:
 
 ## Extension Pattern For New Modules
 
-New hardware modules should be added as narrow runtime adapters first, then exposed through the shared catalog only where needed.
+New hardware modules should be added as narrow runtime adapters first, then exposed through the shared catalog only where needed. Existing pressure, flow, Fluigent, valve, and rotary devices follow the same descriptor pattern.
 
 Recommended sequence:
 
 1. Implement the hardware adapter in its own module, for example `syringe_pump.py` or `balance.py`.
-2. Register editor-visible device names in `DeviceCatalog` using a stable role such as `syringe_pump` or `weight`.
-3. Add measurement buffers only if the device produces time-series data that must be plotted or exported.
-4. Add editor/program-contract constants only when the device needs automation steps.
-5. Keep GUI widgets as thin controls around the adapter; avoid embedding protocol logic in `gui_window.py`.
+2. Add a descriptor helper in `DeviceCatalog` so the GUI does not need to know how to describe the device.
+3. Register editor-visible device names in `DeviceCatalog` using a stable role such as `syringe_pump` or `weight`.
+4. Add measurement buffers only if the device produces time-series data that must be plotted or exported.
+5. Add editor/program-contract constants only when the device needs automation steps.
+6. Keep GUI widgets as thin controls around the adapter; avoid embedding protocol logic in `gui_window.py`.
 
 For example, a balance should become a sensor adapter plus a `weight` catalog entry before it becomes a plot or CSV column. Once it produces live values, register a named extra series in `MeasurementSession` so the CSV exporter can add a stable `Weight [...]` column. A syringe pump should become an actuator adapter plus a `syringe_pump` catalog entry before it gets editor tasks.
 

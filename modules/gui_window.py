@@ -23,10 +23,19 @@ from modules.sampling_manager import SamplingDialog, sampling_manager
 from modules.flow_sensor import SensirionFlowSensor
 from modules.measurement_session import MeasurementSession
 from modules.device_catalog import (
+    ACTUATOR_KIND_PRESSURE_CONTROLLER,
+    ACTUATOR_KIND_ROTARY_VALVE,
     ACTUATOR_KIND_VALVE,
     DeviceCatalog,
     SENSOR_KIND_FLOW,
     SENSOR_KIND_FLUIGENT_PRESSURE,
+    SENSOR_KIND_INTERNAL_PRESSURE,
+    describe_flow_sensor,
+    describe_fluigent_sensor,
+    describe_internal_pressure_sensor,
+    describe_pressure_controller,
+    describe_rotary_valve,
+    describe_valve,
 )
 from modules.fluigent_wrapper import detect_fluigent_sensors
 from modules.program_runner import ProgramRunner
@@ -90,6 +99,7 @@ class PressureFlowGUI(QWidget):
     
         # --- Initialize runtime components ---
         self.pressure_source = PressureController(self.modbus, register=1, type=2)
+        self._register_pressure_controller()
         
         # --- Load the hardware profile from device_prefs.json ---
         profile_name = load_hw_profile_from_prefs(default="stand1")
@@ -118,9 +128,6 @@ class PressureFlowGUI(QWidget):
         self.measurement_session.set_fluigent_channel_count(len(self.fluigent_sensors))
         self._bind_measurement_buffers()
         self._register_fluigent_sensors()
-        
-        # --- Update the shared editor/runner catalogs ---
-        self._publish_device_catalog()
 
         
         # --- Prepare display widgets ---
@@ -144,6 +151,8 @@ class PressureFlowGUI(QWidget):
         
         self.rotaryBox.movedStarted.connect(self._on_rv_started)
         self.rotaryBox.movedFinished.connect(self._on_rv_finished)
+        self._register_rotary_valve()
+        self._publish_device_catalog()
 
         # --- Prepare program execution ---
         self.program_runner = ProgramRunner(self)
@@ -218,31 +227,33 @@ class PressureFlowGUI(QWidget):
         self.available_sensors = self.device_catalog.sensor_names()
         update_available_sensors(self.available_sensors)
 
+    def _register_pressure_controller(self) -> None:
+        """Register the internal pressure monitor and pressure actuator."""
+        self.device_catalog.clear_sensors(SENSOR_KIND_INTERNAL_PRESSURE)
+        self.device_catalog.clear_actuators(ACTUATOR_KIND_PRESSURE_CONTROLLER)
+        self.device_catalog.register_sensor_descriptor(
+            describe_internal_pressure_sensor(self.pressure_source)
+        )
+        self.device_catalog.register_actuator_descriptor(
+            describe_pressure_controller(self.pressure_source)
+        )
+
     def _register_flow_sensors(self) -> None:
         """Register analog flow channels in the shared device catalog."""
         self.device_catalog.clear_sensors(SENSOR_KIND_FLOW)
         for index, sensor in enumerate(self.flow_sensors):
-            self.device_catalog.register_sensor(
-                sensor.name,
-                SENSOR_KIND_FLOW,
-                unit="uL/min",
-                source="modbus",
-                index=index,
-                register=getattr(sensor, "register", None),
-            )
+            self.device_catalog.register_sensor_descriptor(describe_flow_sensor(sensor, index))
 
     def _register_fluigent_sensors(self) -> None:
         """Register detected Fluigent pressure channels in the shared device catalog."""
         self.device_catalog.clear_sensors(SENSOR_KIND_FLUIGENT_PRESSURE)
         for index, sensor in enumerate(self.fluigent_sensors):
-            self.device_catalog.register_sensor(
-                f"SN{sensor.device_sn}",
-                SENSOR_KIND_FLUIGENT_PRESSURE,
-                unit="mbar",
-                source="fluigent",
-                index=index,
-                device_sn=getattr(sensor, "device_sn", ""),
-            )
+            self.device_catalog.register_sensor_descriptor(describe_fluigent_sensor(sensor, index))
+
+    def _register_rotary_valve(self) -> None:
+        """Register the rotary valve stack as one runtime actuator."""
+        self.device_catalog.clear_actuators(ACTUATOR_KIND_ROTARY_VALVE)
+        self.device_catalog.register_actuator_descriptor(describe_rotary_valve(self.rotaryBox))
 
     def _refresh_sensor_value_labels(self) -> None:
         """Rebuild the live sensor-value labels from the runtime device catalog."""
@@ -277,10 +288,17 @@ class PressureFlowGUI(QWidget):
             self.fluigent_sensors = detect_fluigent_sensors()
             self.measurement_session.set_fluigent_channel_count(len(self.fluigent_sensors))
             self._bind_measurement_buffers()
+            self._register_pressure_controller()
             self._register_flow_sensors()
             self._register_fluigent_sensors()
+            self._register_rotary_valve()
             self._publish_device_catalog()
             self._refresh_sensor_value_labels()
+
+            try:
+                self.rotaryBox._refresh()
+            except Exception:
+                pass
 
             if hasattr(self, "plot_area"):
                 if hasattr(self.plot_area, "refresh_fluigent_sensors"):
@@ -399,15 +417,7 @@ class PressureFlowGUI(QWidget):
                     "box": group.get("box", "Valves"),
                 }
                 self._valve_meta.append(meta)
-                self.device_catalog.register_actuator(
-                    meta["editor_name"],
-                    ACTUATOR_KIND_VALVE,
-                    source="modbus",
-                    coil=meta["coil"],
-                    group=meta["group"],
-                    button_label=meta["button_label"],
-                    box=meta["box"],
-                )
+                self.device_catalog.register_actuator_descriptor(describe_valve(meta))
     
         # Publish the editor-visible valve names in the same order used by the GUI.
         update_available_valves(self.device_catalog.valve_names())
@@ -1221,6 +1231,8 @@ class PressureFlowGUI(QWidget):
         corrected = measured - self.offset
     
         self.measurement_session.append_pressure_sample(corrected, measured)
+        if "Internal" in self.sensor_labels:
+            self.sensor_labels["Internal"].setText(f"Internal: {measured:.1f} mbar")
     
         # --- Capture valve states ---
         self.measurement_session.append_valve_states(v.get_state() for v in self.valves)
