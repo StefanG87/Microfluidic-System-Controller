@@ -302,8 +302,6 @@ class PressureFlowGUI(QWidget):
     
         # Publish the editor-visible valve names in the same order used by the GUI.
         update_available_valves([m["editor_name"] for m in self._valve_meta])
-    
-        print("[ValveMap]", [(m["box"], m["button_label"], m["editor_name"], m["coil"]) for m in self._valve_meta])
 
     
     def _clear_valve_groups(self) -> None:

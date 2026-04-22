@@ -1,11 +1,11 @@
 """Program step list and editing controls for the editor."""
 
 import json
-import os
 from functools import partial
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
+from modules.mf_common import resource_path
 from modules.polynomial_pressure import describe_pressure_function, is_open_loop_sensor, normalize_polynomial_pressure_params
 from modules.program_contract import (
     PARAM_ACTION,
@@ -70,6 +70,11 @@ from .editor_step import Step
 from .special_tasks import SpecialTasks
 
 
+def _editor_icon_path(filename: str) -> str:
+    """Resolve editor toolbar icons in source runs and PyInstaller bundles."""
+    return resource_path(f"editor/icons/{filename}")
+
+
 class EditorJobList(QWidget):
     """Manage the editable program step list shown on the right side of the editor."""
 
@@ -84,31 +89,29 @@ class EditorJobList(QWidget):
         main_layout = QVBoxLayout(self)
         button_row = QHBoxLayout()
 
-        icon_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "icons"))
-
         self.btn_save = QPushButton()
-        self.btn_save.setIcon(QIcon(os.path.join(icon_folder, "save.png")))
+        self.btn_save.setIcon(QIcon(_editor_icon_path("save.png")))
         self.btn_save.setToolTip("Save Program")
         self.btn_save.setMaximumSize(32, 32)
         self.btn_save.clicked.connect(self.save_program)
         button_row.addWidget(self.btn_save)
 
         self.btn_load = QPushButton()
-        self.btn_load.setIcon(QIcon(os.path.join(icon_folder, "open.png")))
+        self.btn_load.setIcon(QIcon(_editor_icon_path("open.png")))
         self.btn_load.setToolTip("Load Program")
         self.btn_load.setMaximumSize(32, 32)
         self.btn_load.clicked.connect(self.load_program)
         button_row.addWidget(self.btn_load)
 
         self.btn_undo = QPushButton()
-        self.btn_undo.setIcon(QIcon(os.path.join(icon_folder, "undo.png")))
+        self.btn_undo.setIcon(QIcon(_editor_icon_path("undo.png")))
         self.btn_undo.setToolTip("Undo")
         self.btn_undo.setMaximumSize(32, 32)
         self.btn_undo.clicked.connect(self.undo)
         button_row.addWidget(self.btn_undo)
 
         self.btn_redo = QPushButton()
-        self.btn_redo.setIcon(QIcon(os.path.join(icon_folder, "redo.png")))
+        self.btn_redo.setIcon(QIcon(_editor_icon_path("redo.png")))
         self.btn_redo.setToolTip("Redo")
         self.btn_redo.setMaximumSize(32, 32)
         self.btn_redo.clicked.connect(self.redo)
