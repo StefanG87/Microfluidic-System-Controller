@@ -84,7 +84,7 @@ Important boundaries now in place:
 
 - Measurement buffers are grouped in `MeasurementSession` instead of being owned only as loose GUI lists.
 - Generic future measurement channels can be registered in `MeasurementSession` as named extra series so they become CSV columns without changing the established pressure/flow/valve export format.
-- Runtime device names are grouped in `DeviceCatalog` before being published to editor dialogs. Existing hardware modules expose catalog descriptors through this central layer instead of duplicating device metadata in the GUI.
+- Runtime device names, units, profile-derived valve metadata, and default editor fallback devices are grouped in `DeviceCatalog` before being published to editor dialogs. Existing hardware modules expose catalog descriptors through this central layer instead of duplicating device metadata in the GUI.
 - The main GUI `Update Config` button refreshes detected sensors and editor-visible device lists only when no measurement or program is active.
 - Program step names and parameter keys are centralized in `program_contract.py`.
 - Pressure-profile math and preview data are centralized in `polynomial_pressure.py`.
@@ -108,7 +108,7 @@ New hardware modules should be added as narrow runtime adapters first, then expo
 Recommended sequence:
 
 1. Implement the hardware adapter in its own module, for example `syringe_pump.py` or `balance.py`.
-2. Add a descriptor helper in `DeviceCatalog` so the GUI does not need to know how to describe the device.
+2. Add descriptor constants/helpers in `DeviceCatalog` so GUI, editor, CSV, and automation code do not duplicate display names, units, or profile metadata.
 3. Register editor-visible device names in `DeviceCatalog` using a stable role such as `syringe_pump` or `weight`.
 4. Add measurement buffers only if the device produces time-series data that must be plotted or exported.
 5. Add editor/program-contract constants only when the device needs automation steps.

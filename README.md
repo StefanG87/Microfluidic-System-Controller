@@ -36,7 +36,7 @@ The main runtime window is `PressureFlowGUI` in `modules/gui_window.py`.
 
 - `modules/gui_window.py` is still the main orchestration point for UI, hardware lifecycle, buffering, export, and automation startup.
 - `modules/measurement_session.py` owns live measurement buffers, generic extra measurement series, and CSV export snapshots.
-- `modules/device_catalog.py` is the preferred place to publish editor-visible runtime devices when new hardware modules are added; existing pressure, flow, Fluigent, valve, and rotary devices use the same descriptor pattern.
+- `modules/device_catalog.py` is the preferred place to publish editor-visible runtime devices, display names, units, and profile-derived valve metadata when new hardware modules are added; existing pressure, flow, Fluigent, valve, and rotary devices use the same descriptor pattern.
 - The main GUI `Update Config` button refreshes detected sensors and editor device lists when no measurement or program is active.
 - `modules/program_contract.py` defines the shared editor/runner step names and parameter keys.
 - `modules/program_runner.py` executes editor-generated JSON steps through narrow runtime methods exposed by the GUI.
@@ -95,6 +95,7 @@ Recommended workflow:
 
 - Keep editor parameters and runtime behavior aligned through `program_contract.py`.
 - Register new sensors and actuators through `DeviceCatalog` descriptor helpers before wiring them into editor tasks, plotting, or CSV export.
+- Keep device display names and measurement units in `DeviceCatalog` constants/helpers instead of duplicating strings across GUI and editor modules.
 - For future time-series devices such as a balance, register a named extra series in `MeasurementSession` so the CSV exporter can add one stable column per device signal.
 - Keep advanced pressure-profile behavior documented when `PolynomialPressure` changes.
 - Reduce broad `try/except` blocks where clearer logging can preserve stability without hiding root causes.

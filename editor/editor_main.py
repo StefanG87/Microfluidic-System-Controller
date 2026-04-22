@@ -31,6 +31,13 @@ from modules.mf_common import (
     load_hw_profile_from_prefs,
     save_hw_profile_to_prefs,
 )
+from modules.device_catalog import (
+    DeviceCatalog,
+    describe_internal_pressure_sensor,
+    describe_valve,
+    register_default_flow_sensors,
+    valve_meta_from_profile_item,
+)
 
 
 def _profile_json_path(profile_name: str) -> str:
@@ -41,27 +48,32 @@ def _profile_json_path(profile_name: str) -> str:
 def _set_editor_devices_from_profile(profile_name: str):
     """Load a profile, publish editor valve names, and expose generic standalone sensors."""
     prof = load_hardware_profile(_profile_json_path(profile_name))
+    catalog = DeviceCatalog()
+    catalog.register_sensor_descriptor(describe_internal_pressure_sensor())
+    register_default_flow_sensors(catalog)
 
-    valve_names = []
     for group in prof.get("valve_groups", []):
         for item in group.get("items", []):
-            valve_names.append(str(item.get("editor_name", "")))
+            catalog.register_actuator_descriptor(
+                describe_valve(valve_meta_from_profile_item(group, item))
+            )
+
+    valve_names = catalog.valve_names()
+    sensor_names = catalog.sensor_names()
 
     if hasattr(task_globals, "update_available_valves"):
         task_globals.update_available_valves(valve_names)
     else:
         task_globals.AVAILABLE_VALVES = valve_names
 
-    sensors = ["Internal"]
-    sensors.extend([f"Flow {i+1}" for i in range(4)])
     if hasattr(task_globals, "update_available_sensors"):
-        task_globals.update_available_sensors(sensors)
+        task_globals.update_available_sensors(sensor_names)
     else:
-        task_globals.AVAILABLE_SENSORS = sensors
+        task_globals.AVAILABLE_SENSORS = sensor_names
 
     return {
         "name": prof.get("name", profile_name),
-        "valves": valve_names,
+        **catalog.to_embedded_editor_info(),
     }
 
 

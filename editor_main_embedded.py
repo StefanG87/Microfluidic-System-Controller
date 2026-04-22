@@ -1,6 +1,7 @@
 """Integrated program editor window used by the main controller GUI."""
 
 import sys
+from types import SimpleNamespace
 
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QApplication, QHBoxLayout, QShortcut, QWidget
@@ -9,6 +10,14 @@ from editor.modules.editor.editor_joblist import EditorJobList
 from editor.modules.editor.editor_step import Step
 from editor.modules.editor.editor_tasklist import EditorTaskList
 from editor.modules.editor.task_globals import update_available_sensors, update_available_valves
+from modules.device_catalog import (
+    DeviceCatalog,
+    SENSOR_NAME_INTERNAL,
+    describe_fluigent_sensor,
+    describe_internal_pressure_sensor,
+    describe_valve,
+    register_default_flow_sensors,
+)
 
 
 class EmbeddedEditorWindow(QWidget):
@@ -43,8 +52,8 @@ class EmbeddedEditorWindow(QWidget):
         if not sensor_names:
             sensor_names.extend(self.device_info.get("flow_sensors", []))
             sensor_names.extend(self.device_info.get("fluigent_sensors", []))
-        if "Internal" not in sensor_names:
-            sensor_names.insert(0, "Internal")
+        if SENSOR_NAME_INTERNAL not in sensor_names:
+            sensor_names.insert(0, SENSOR_NAME_INTERNAL)
 
         valve_names = list(self.device_info.get("valve_names", []))
         if not valve_names:
@@ -57,11 +66,25 @@ class EmbeddedEditorWindow(QWidget):
 
 def _build_dummy_device_info() -> dict:
     """Return a small standalone preview context for manual editor checks."""
-    return {
-        "valve_names": ["Pneumatic 1", "Pneumatic 2", "Fluidic 1", "Fluidic 2"],
-        "flow_sensors": ["Flow 1", "Flow 2"],
-        "fluigent_sensors": ["SN12345"],
-    }
+    catalog = DeviceCatalog()
+    catalog.register_sensor_descriptor(describe_internal_pressure_sensor())
+    register_default_flow_sensors(catalog, count=2)
+    catalog.register_sensor_descriptor(
+        describe_fluigent_sensor(SimpleNamespace(device_sn="12345"), 0)
+    )
+    for name in ("Pneumatic 1", "Pneumatic 2", "Fluidic 1", "Fluidic 2"):
+        catalog.register_actuator_descriptor(
+            describe_valve(
+                {
+                    "editor_name": name,
+                    "button_label": name,
+                    "group": "",
+                    "coil": 0,
+                    "box": "Valves",
+                }
+            )
+        )
+    return catalog.to_embedded_editor_info()
 
 
 def main() -> int:

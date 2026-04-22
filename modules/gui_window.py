@@ -27,15 +27,19 @@ from modules.device_catalog import (
     ACTUATOR_KIND_ROTARY_VALVE,
     ACTUATOR_KIND_VALVE,
     DeviceCatalog,
+    SENSOR_NAME_INTERNAL,
     SENSOR_KIND_FLOW,
     SENSOR_KIND_FLUIGENT_PRESSURE,
     SENSOR_KIND_INTERNAL_PRESSURE,
+    UNIT_FLOW_UL_MIN,
+    UNIT_PRESSURE_MBAR,
     describe_flow_sensor,
     describe_fluigent_sensor,
     describe_internal_pressure_sensor,
     describe_pressure_controller,
     describe_rotary_valve,
     describe_valve,
+    valve_meta_from_profile_item,
 )
 from modules.fluigent_wrapper import detect_fluigent_sensors
 from modules.program_runner import ProgramRunner
@@ -409,13 +413,7 @@ class PressureFlowGUI(QWidget):
             for item in group.get("items", []):
                 v = Valve(self.modbus, int(item["coil"]))
                 self.valves.append(v)
-                meta = {
-                    "group": str(item.get("group", "")).lower(),
-                    "editor_name": str(item.get("editor_name", "")),
-                    "button_label": str(item.get("button_label", "")) or str(item.get("editor_name", "")),
-                    "coil": int(item.get("coil", 0)),
-                    "box": group.get("box", "Valves"),
-                }
+                meta = valve_meta_from_profile_item(group, item)
                 self._valve_meta.append(meta)
                 self.device_catalog.register_actuator_descriptor(describe_valve(meta))
     
@@ -604,14 +602,14 @@ class PressureFlowGUI(QWidget):
             self.favorite_labels.append(label)
             row.addWidget(label, 1)
         
-            btn_select = QPushButton("📂")
-            btn_select.setFixedWidth(30)
+            btn_select = QPushButton("...")
+            btn_select.setFixedWidth(45)
             btn_select.clicked.connect(lambda _, idx=i: self.select_favorite(idx))
             self.favorite_select_buttons.append(btn_select)
             row.addWidget(btn_select)
         
-            btn_run = QPushButton("▶")
-            btn_run.setFixedWidth(30)
+            btn_run = QPushButton("Run")
+            btn_run.setFixedWidth(45)
             btn_run.clicked.connect(lambda _, idx=i: self.run_favorite(idx))
             self.favorite_run_buttons.append(btn_run)
             row.addWidget(btn_run)
@@ -860,12 +858,19 @@ class PressureFlowGUI(QWidget):
 
     def read_program_sensor_value(self, sensor_name):
         """Read any sensor name used by automation programs."""
-        if sensor_name == "Internal":
+        descriptor = self.device_catalog.sensor_by_name(sensor_name)
+        if descriptor is None:
+            return None
+
+        if descriptor.kind == SENSOR_KIND_INTERNAL_PRESSURE:
             return self.read_internal_pressure_mbar()
-        if sensor_name.startswith("Flow"):
-            return self.read_flow_sensor_value(sensor_name)
-        if sensor_name.startswith("SN"):
-            return self.read_fluigent_sensor_value(sensor_name)
+
+        if descriptor.kind == SENSOR_KIND_FLOW:
+            return self.read_flow_sensor_value(descriptor.name)
+
+        if descriptor.kind == SENSOR_KIND_FLUIGENT_PRESSURE:
+            return self.read_fluigent_sensor_value(descriptor.name)
+
         return None
 
     def set_valve_state_by_index(self, index, state):
@@ -1231,8 +1236,10 @@ class PressureFlowGUI(QWidget):
         corrected = measured - self.offset
     
         self.measurement_session.append_pressure_sample(corrected, measured)
-        if "Internal" in self.sensor_labels:
-            self.sensor_labels["Internal"].setText(f"Internal: {measured:.1f} mbar")
+        if SENSOR_NAME_INTERNAL in self.sensor_labels:
+            self.sensor_labels[SENSOR_NAME_INTERNAL].setText(
+                f"{SENSOR_NAME_INTERNAL}: {measured:.1f} {UNIT_PRESSURE_MBAR}"
+            )
     
         # --- Capture valve states ---
         self.measurement_session.append_valve_states(v.get_state() for v in self.valves)
@@ -1244,9 +1251,9 @@ class PressureFlowGUI(QWidget):
             value = val if val is not None else 0.0
             self.measurement_session.append_flow_value(i, value)
     
-            label_key = f"Flow {i+1}"
+            label_key = sensor.name
             if label_key in self.sensor_labels:
-                self.sensor_labels[label_key].setText(f"{label_key}: {value:.1f} uL/min")
+                self.sensor_labels[label_key].setText(f"{label_key}: {value:.1f} {UNIT_FLOW_UL_MIN}")
         # --- Read Fluigent sensors ---
         for i, sensor in enumerate(self.fluigent_sensors):
             val = sensor.read_pressure()
@@ -1255,7 +1262,7 @@ class PressureFlowGUI(QWidget):
     
             sn_key = f"SN{sensor.device_sn}"
             if sn_key in self.sensor_labels:
-                self.sensor_labels[sn_key].setText(f"{sn_key}: {value:.1f} mbar")
+                self.sensor_labels[sn_key].setText(f"{sn_key}: {value:.1f} {UNIT_PRESSURE_MBAR}")
     
         # --- Refresh the live display label ---
         self.label_display.setText(

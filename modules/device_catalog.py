@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any, Iterable
 
 
@@ -15,6 +16,13 @@ ACTUATOR_KIND_PRESSURE_CONTROLLER = "pressure_controller"
 ACTUATOR_KIND_ROTARY_VALVE = "rotary_valve"
 ACTUATOR_KIND_VALVE = "valve"
 ACTUATOR_KIND_SYRINGE_PUMP = "syringe_pump"
+
+SENSOR_NAME_INTERNAL = "Internal"
+ACTUATOR_NAME_PRESSURE_CONTROLLER = "Pressure Controller"
+ACTUATOR_NAME_ROTARY_VALVE = "Rotary Valve"
+
+UNIT_PRESSURE_MBAR = "mbar"
+UNIT_FLOW_UL_MIN = "uL/min"
 
 SENSOR_KIND_ORDER = (
     SENSOR_KIND_INTERNAL_PRESSURE,
@@ -178,9 +186,25 @@ class DeviceCatalog:
         """Return sensor names in the same order as the descriptor view."""
         return [sensor.name for sensor in self.sensors(kind)]
 
+    def sensor_by_name(self, name: str) -> SensorDescriptor | None:
+        """Return one sensor descriptor by its editor-visible name."""
+        name = str(name or "")
+        for sensor in self.sensors():
+            if sensor.name == name:
+                return sensor
+        return None
+
     def actuator_names(self, kind: str | Iterable[str] | None = None) -> list[str]:
         """Return actuator names in the same order as the descriptor view."""
         return [actuator.name for actuator in self.actuators(kind)]
+
+    def actuator_by_name(self, name: str) -> ActuatorDescriptor | None:
+        """Return one actuator descriptor by its editor-visible name."""
+        name = str(name or "")
+        for actuator in self.actuators():
+            if actuator.name == name:
+                return actuator
+        return None
 
     def valve_names(self) -> list[str]:
         """Return valves in the order used by the GUI and automation runner."""
@@ -202,9 +226,9 @@ class DeviceCatalog:
 def describe_internal_pressure_sensor(controller=None) -> SensorDescriptor:
     """Describe the pressure controller monitor as an editor-visible sensor."""
     return SensorDescriptor(
-        name="Internal",
+        name=SENSOR_NAME_INTERNAL,
         kind=SENSOR_KIND_INTERNAL_PRESSURE,
-        unit="mbar",
+        unit=UNIT_PRESSURE_MBAR,
         source="pressure_controller",
         metadata={
             "register": getattr(controller, "register", None),
@@ -215,7 +239,7 @@ def describe_internal_pressure_sensor(controller=None) -> SensorDescriptor:
 def describe_pressure_controller(controller=None) -> ActuatorDescriptor:
     """Describe the pressure controller as a runtime actuator."""
     return ActuatorDescriptor(
-        name="Pressure Controller",
+        name=ACTUATOR_NAME_PRESSURE_CONTROLLER,
         kind=ACTUATOR_KIND_PRESSURE_CONTROLLER,
         source="modbus",
         metadata={
@@ -231,7 +255,7 @@ def describe_flow_sensor(sensor, index: int) -> SensorDescriptor:
     return SensorDescriptor(
         name=str(getattr(sensor, "name", f"Flow {index + 1}")),
         kind=SENSOR_KIND_FLOW,
-        unit="uL/min",
+        unit=UNIT_FLOW_UL_MIN,
         source="modbus",
         metadata={
             "index": index,
@@ -242,19 +266,52 @@ def describe_flow_sensor(sensor, index: int) -> SensorDescriptor:
     )
 
 
+def register_default_flow_sensors(
+    catalog: DeviceCatalog,
+    count: int = 4,
+    first_register: int = 4,
+    flow_min: float = 0.0,
+    flow_max: float = 1000.0,
+) -> None:
+    """Register the default Modbus-backed flow channels used by the lab setup."""
+    for index in range(int(count)):
+        catalog.register_sensor_descriptor(
+            describe_flow_sensor(
+                SimpleNamespace(
+                    name=f"Flow {index + 1}",
+                    register=first_register + index,
+                    flow_min=flow_min,
+                    flow_max=flow_max,
+                ),
+                index,
+            )
+        )
+
+
 def describe_fluigent_sensor(sensor, index: int) -> SensorDescriptor:
     """Describe one Fluigent pressure sensor channel."""
     device_sn = str(getattr(sensor, "device_sn", ""))
     return SensorDescriptor(
         name=f"SN{device_sn}" if device_sn else f"Fluigent {index + 1}",
         kind=SENSOR_KIND_FLUIGENT_PRESSURE,
-        unit="mbar",
+        unit=UNIT_PRESSURE_MBAR,
         source="fluigent",
         metadata={
             "index": index,
             "device_sn": device_sn,
         },
     )
+
+
+def valve_meta_from_profile_item(group: dict, item: dict) -> dict:
+    """Return normalized metadata for one hardware-profile valve entry."""
+    return {
+        "group": str(item.get("group", "")).lower(),
+        "editor_name": str(item.get("editor_name", "")),
+        "button_label": str(item.get("button_label", "")) or str(item.get("editor_name", "")),
+        "coil": int(item.get("coil", 0)),
+        "box": group.get("box", "Valves"),
+    }
 
 
 def describe_valve(meta: dict) -> ActuatorDescriptor:
@@ -276,7 +333,7 @@ def describe_rotary_valve(widget=None) -> ActuatorDescriptor:
     """Describe the rotary valve UI/controller stack as one runtime actuator."""
     controller = getattr(widget, "ctl", None)
     return ActuatorDescriptor(
-        name="Rotary Valve",
+        name=ACTUATOR_NAME_ROTARY_VALVE,
         kind=ACTUATOR_KIND_ROTARY_VALVE,
         source="serial",
         metadata={

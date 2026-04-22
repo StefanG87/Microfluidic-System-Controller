@@ -4,6 +4,11 @@ These module-level lists are intentionally mutable so importers that bind
 `AVAILABLE_SENSORS` / `AVAILABLE_VALVES` once can still observe later updates.
 """
 
+try:
+    from modules.device_catalog import SENSOR_NAME_INTERNAL
+except ImportError:
+    SENSOR_NAME_INTERNAL = "Internal"
+
 AVAILABLE_SENSORS = []
 AVAILABLE_VALVES = []
 
@@ -22,7 +27,7 @@ def update_available_valves(valve_list):
 
 def get_available_sensors():
     """Return the configured sensors or a small fallback set for standalone use."""
-    return list(AVAILABLE_SENSORS) or ["Internal", "Flow 1", "SN12345"]
+    return list(AVAILABLE_SENSORS) or [SENSOR_NAME_INTERNAL, "Flow 1", "SN12345"]
 
 
 def get_available_valves():

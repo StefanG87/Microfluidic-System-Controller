@@ -5,6 +5,7 @@ import sip
 from modules.rvm_dt import list_serial_ports
 from modules.rotary_valve_controller import RotaryValveController
 from modules.mf_common import load_last_comport, save_last_comport
+from modules.device_catalog import ACTUATOR_NAME_ROTARY_VALVE
 
 
 class _RVWorker(QtCore.QObject):
@@ -58,7 +59,7 @@ class RotaryValveQBox(QtWidgets.QGroupBox):
     activeChanged = QtCore.pyqtSignal(int)
 
     def __init__(self, parent=None):
-        super().__init__("Rotary Valve", parent)
+        super().__init__(ACTUATOR_NAME_ROTARY_VALVE, parent)
         self.ctl = RotaryValveController()
         self._worker_thread: Optional[QtCore.QThread] = None
         self._worker: Optional[_RVWorker] = None
@@ -91,8 +92,8 @@ class RotaryValveQBox(QtWidgets.QGroupBox):
 
         # --- UI: bottom row (controls) ---
         self.btnHome = QtWidgets.QPushButton("Home")
-        self.btnPrev = QtWidgets.QPushButton("◀ Prev")
-        self.btnNext = QtWidgets.QPushButton("Next ▶")
+        self.btnPrev = QtWidgets.QPushButton("Prev")
+        self.btnNext = QtWidgets.QPushButton("Next")
         self.cmbGoto = QtWidgets.QComboBox()
         self.cmbGoto.addItems([str(i) for i in range(1, 13)])  # default 12
         self.btnGoto = QtWidgets.QPushButton("Go")
@@ -220,7 +221,7 @@ class RotaryValveQBox(QtWidgets.QGroupBox):
 
     def _goto_relative(self, delta: int) -> None:
         """
-        Compute target = (current ± 1) wrapped 1..N, then call _goto_to(target).
+        Compute target = (current +/- 1) wrapped 1..N, then call _goto_to(target).
         This avoids reading the combobox (no commit races).
         """
         if self._busy or self._thread_alive():
