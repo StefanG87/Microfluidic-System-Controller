@@ -83,6 +83,33 @@ class MeasurementSession:
         self.abs_time_data.clear()
         self.rotary_active.clear()
 
+    def begin_sample(self, abs_time, rel_time, target_pressure):
+        """Record the shared timestamps and target pressure for one sample."""
+        self.time_data.append(rel_time)
+        self.abs_time_data.append(abs_time)
+        self.target_data.append(target_pressure)
+
+    def append_pressure_sample(self, corrected, measured):
+        """Record the pressure values for the current sample."""
+        self.corrected_data.append(corrected)
+        self.measured_data.append(measured)
+
+    def append_valve_states(self, states):
+        """Record the current valve states for the current sample."""
+        self.valve_states.append(list(states))
+
+    def append_flow_value(self, channel_index, value):
+        """Record one flow-sensor value for the current sample."""
+        self.flow_data[channel_index].append(value)
+
+    def append_fluigent_pressure_value(self, channel_index, value):
+        """Record one Fluigent pressure value for the current sample."""
+        self.fluigent_pressure_data[channel_index].append(value)
+
+    def append_rotary_active(self, active_port):
+        """Record the sampled rotary-valve active port for the current sample."""
+        self.rotary_active.append(active_port)
+
     def rollback_partial_sample(self):
         """Remove the data written before a failed pressure readout."""
         if self.time_data:

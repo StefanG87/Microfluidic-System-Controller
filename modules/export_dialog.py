@@ -1,7 +1,4 @@
-"""Dialog and writer for exporting measurement buffers to CSV."""
-
-import csv
-from datetime import datetime
+"""Dialog for exporting measurement buffers to CSV."""
 
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QDialog, QFileDialog, QMessageBox, QPushButton, QVBoxLayout
@@ -106,69 +103,24 @@ class ExportDialog(QDialog):
         self._final_path = path
 
         try:
-            with open(path, "w", newline="", encoding="utf-8-sig") as f:
-                writer = csv.writer(f, delimiter=";")
-
-                writer.writerow(["Exported", datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
-                writer.writerow(["Offset [mbar]", f"{self.offset:.2f}".replace(".", ",")])
-                writer.writerow(["Sampling interval [ms]", str(self.sampling_interval_ms)])
-                writer.writerow(["Hardware profile", self.profile_name or "-"])
-                if self.valve_coils and self.valve_names:
-                    writer.writerow(["Valve mapping (name -> coil)"])
-                    for i, name in enumerate(self.valve_names):
-                        coil = self.valve_coils[i] if i < len(self.valve_coils) else "-"
-                        writer.writerow([f"V{i+1}", name, f"coil {coil}"])
-
-                writer.writerow([])
-                if self.start_timestamp:
-                    dt = datetime.fromtimestamp(self.start_timestamp)
-                    writer.writerow(["Start timestamp (absolute)", dt.strftime("%Y-%m-%d %H:%M:%S")])
-
-                header = ["Absolute Time [ISO]", "Time [s]", "Target [mbar]", "Corrected [mbar]", "Measured [mbar]"]
-                if self.valve_names and len(self.valve_names) >= 1:
-                    header += [str(name) for name in self.valve_names]
-                else:
-                    header += [f"V{i+1}" for i in range(8)]
-
-                header += [f"Flow {i+1} [uL/min]" for i in range(len(self.flow_data))]
-                if self.fluigent_sensors and len(self.fluigent_sensors) == len(self.fluigent_data):
-                    header += [f"SN{sensor.device_sn} [mbar]" for sensor in self.fluigent_sensors]
-                else:
-                    header += [f"Pressure {i+1} [mbar]" for i in range(len(self.fluigent_data))]
-
-                header.append("Rotary Active")
-                writer.writerow(header)
-
-                for i in range(len(self.time_data)):
-                    abs_timestamp = self.time_data[i]
-                    rel_time = round(abs_timestamp - self.start_timestamp, 2) if self.start_timestamp else 0.0
-                    abs_time_str = datetime.fromtimestamp(abs_timestamp).strftime("%Y-%m-%d %H:%M:%S")
-
-                    row = [
-                        abs_time_str,
-                        str(rel_time).replace(".", ","),
-                        str(self.target[i] if i < len(self.target) else 0.0).replace(".", ","),
-                        str(self.corrected[i] if i < len(self.corrected) else 0.0).replace(".", ","),
-                        str(self.measured[i] if i < len(self.measured) else 0.0).replace(".", ","),
-                    ]
-
-                    row += [str(v) for v in self.valve_states[i]] if i < len(self.valve_states) else ["0"] * 8
-                    row += [
-                        str(self.flow_data[j][i] if i < len(self.flow_data[j]) else 0.0).replace(".", ",")
-                        for j in range(len(self.flow_data))
-                    ]
-                    row += [
-                        str(self.fluigent_data[j][i] if i < len(self.fluigent_data[j]) else 0.0).replace(".", ",")
-                        for j in range(len(self.fluigent_data))
-                    ]
-
-                    if self.rotary_active and i < len(self.rotary_active):
-                        rv = self.rotary_active[i]
-                        row.append(str(int(rv)) if isinstance(rv, int) and rv > 0 else "-")
-                    else:
-                        row.append("-")
-
-                    writer.writerow(row)
+            CSVExporter.write_measurement_csv(
+                path,
+                time_data=self.time_data,
+                target=self.target,
+                corrected=self.corrected,
+                measured=self.measured,
+                valve_states=self.valve_states,
+                flow_data=self.flow_data,
+                fluigent_data=self.fluigent_data,
+                offset=self.offset,
+                sampling_interval_ms=self.sampling_interval_ms,
+                start_timestamp=self.start_timestamp,
+                rotary_active=self.rotary_active,
+                valve_names=self.valve_names,
+                profile_name=self.profile_name,
+                valve_coils=self.valve_coils,
+                fluigent_sensors=self.fluigent_sensors,
+            )
 
             if not silent and self.isVisible():
                 QMessageBox.information(self, "Success", f"Data saved to:\n{path}")

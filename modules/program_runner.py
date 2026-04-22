@@ -151,10 +151,9 @@ class ProgramRunner:
             return
 
         elif type_ == STEP_SET_PRESSURE_ZERO:
-            self.gui.set_target_pressure_mbar(0.0)
-            self._log("Set pressure to 0 mbar")
+            self.gui.reset_pressure_hardware_zero_mbar()
+            self._log("Pressure output set to hardware 0 mbar (no pressure).")
             return
-
         elif type_ == STEP_VALVE:
             valve_name = params.get(PARAM_VALVE_NAME, "")
             if not valve_name and params.get("valve_number") is not None:
@@ -440,9 +439,7 @@ class ProgramRunner:
 
             # Plot/export should show the desired pressure curve. The hardware command may
             # differ in closed-loop mode because it includes the bounded feedback correction.
-            self.gui.target_pressure = limited_target
-            self.gui.pressure_source.setDesiredPressure(limited_command + self.gui.offset)
-
+            self.gui.set_program_pressure_command_mbar(limited_target, limited_command)
             previous_target = limited_target
             previous_command = limited_command
             final_target = limited_target

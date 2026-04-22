@@ -392,7 +392,7 @@ class PressureFlowGUI(QWidget):
         toolbar.addWidget(self.btn_zero_fluigent)
         
         self.btn_set0 = QPushButton("Set Pressure to 0")
-        self.btn_set0.clicked.connect(lambda: self.pressure_source.setDesiredPressure(0))
+        self.btn_set0.clicked.connect(self.reset_pressure_hardware_zero_mbar)
         toolbar.addWidget(self.btn_set0)
         
         self.btn_export = QToolButton()
@@ -680,6 +680,14 @@ class PressureFlowGUI(QWidget):
         self.target_pressure = value_mbar
         self.pressure_source.setDesiredPressure(value_mbar + self.offset)
         return value_mbar
+
+    def set_program_pressure_command_mbar(self, display_target_mbar, hardware_target_mbar):
+        """Set separate displayed and hardware pressure targets for automation control loops."""
+        display_target_mbar = float(display_target_mbar)
+        hardware_target_mbar = float(hardware_target_mbar)
+        self.target_pressure = display_target_mbar
+        self.pressure_source.setDesiredPressure(hardware_target_mbar + self.offset)
+        return display_target_mbar
 
     def get_target_pressure_mbar(self):
         """Return the current user-facing pressure target in mbar."""
@@ -1107,17 +1115,9 @@ class PressureFlowGUI(QWidget):
             sampling_manager.reset_time()
             abs_time, rel_time = sampling_manager.get_timestamps()
     
-        # Plotting uses relative time only (start = 0 s).
-        self.time_data.append(rel_time)
-    
-        # Export keeps the absolute timestamps in a separate buffer.
-        if not hasattr(self, "abs_time_data"):
-            self.abs_time_data = []
-        self.abs_time_data.append(abs_time)
-    
-        # --- Track the current target pressure ---
-        self.target_data.append(self.target_pressure)
-    
+        # Store the time base and target pressure in the measurement session.
+        self.measurement_session.begin_sample(abs_time, rel_time, self.target_pressure)
+
         # --- Read the internal pressure source ---
         raw = self.pressure_source.getRawMonitorValue()
         if raw is None:
@@ -1127,18 +1127,17 @@ class PressureFlowGUI(QWidget):
         measured = self.pressure_source.bitToMbar(raw)
         corrected = measured - self.offset
     
-        self.corrected_data.append(corrected)
-        self.measured_data.append(measured)
+        self.measurement_session.append_pressure_sample(corrected, measured)
     
         # --- Capture valve states ---
-        self.valve_states.append([v.get_state() for v in self.valves])
+        self.measurement_session.append_valve_states(v.get_state() for v in self.valves)
         self._sync_valve_buttons()
     
         # --- Read flow sensors ---
         for i, sensor in enumerate(self.flow_sensors):
             val = sensor.read_flow()
             value = val if val is not None else 0.0
-            self.flow_data[i].append(value)
+            self.measurement_session.append_flow_value(i, value)
     
             label_key = f"Flow {i+1}"
             if label_key in self.sensor_labels:
@@ -1147,7 +1146,7 @@ class PressureFlowGUI(QWidget):
         for i, sensor in enumerate(self.fluigent_sensors):
             val = sensor.read_pressure()
             value = val if val is not None else 0.0
-            self.fluigent_pressure_data[i].append(value)
+            self.measurement_session.append_fluigent_pressure_value(i, value)
     
             sn_key = f"SN{sensor.device_sn}"
             if sn_key in self.sensor_labels:
@@ -1159,7 +1158,7 @@ class PressureFlowGUI(QWidget):
         )
     
         # Record the rotary state for the plot background bands.
-        self.rotary_active.append(self._snapshot_rotary_active())
+        self.measurement_session.append_rotary_active(self._snapshot_rotary_active())
     
         # --- Refresh the plot ---
         try:
@@ -1213,7 +1212,7 @@ class PressureFlowGUI(QWidget):
     
         # --- Non-interactive export used by automation ---
         else:
-            dlg = ExportDialog(parent=self, snapshot=snapshot, auto_path=path, silent=silent)
+            dlg = ExportDialog(parent=self, snapshot=snapshot, silent=silent)
             dlg.save_csv(path=path, silent=silent)
 
 
