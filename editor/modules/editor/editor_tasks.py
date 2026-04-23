@@ -43,7 +43,9 @@ from modules.program_contract import (
     STEP_LOOP,
     STEP_ROTARY_VALVE,
     STEP_SET_PRESSURE,
+    STEP_SET_PRESSURE_ZERO,
     STEP_START_MEASUREMENT,
+    STEP_STOP_MEASUREMENT,
     STEP_VALVE,
     STEP_WAIT,
     STEP_WAIT_FOR_SENSOR_EVENT,
@@ -67,6 +69,8 @@ class EditorTasks:
         """Open the matching editor dialog for a standard task."""
         if step.type == STEP_SET_PRESSURE:
             EditorTasks.edit_set_pressure(parent, step)
+        elif step.type == STEP_SET_PRESSURE_ZERO:
+            EditorTasks.edit_parameterless_task(parent, step)
         elif step.type == STEP_ADD_PRESSURE:
             EditorTasks.edit_add_pressure(parent, step)
         elif step.type == STEP_VALVE:
@@ -77,6 +81,8 @@ class EditorTasks:
             EditorTasks.edit_sensor_event(parent, step)
         elif step.type == STEP_START_MEASUREMENT:
             EditorTasks.edit_start_measurement(parent, step)
+        elif step.type == STEP_STOP_MEASUREMENT:
+            EditorTasks.edit_parameterless_task(parent, step)
         elif step.type == STEP_EXPORT_CSV:
             EditorTasks.edit_export_csv(parent, step)
         elif step.type == STEP_LOOP:
@@ -193,6 +199,12 @@ class EditorTasks:
         )
         if ok:
             step.params = {PARAM_SAMPLING_INTERVAL_MS: interval_ms}
+
+    @staticmethod
+    def edit_parameterless_task(parent, step):
+        """Normalize a standard task that intentionally stores no parameters."""
+        _ = parent
+        step.params = {}
 
     @staticmethod
     def edit_export_csv(parent, step):

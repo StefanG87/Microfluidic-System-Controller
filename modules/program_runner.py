@@ -167,7 +167,7 @@ class ProgramRunner:
         elif type_ == STEP_WAIT:
             seconds = float(params.get(PARAM_TIME_SEC, 1.0))
             self._log(f"Waiting for {seconds} seconds")
-            time.sleep(seconds)
+            self._sleep_abortable(seconds)
             return
 
         elif type_ == STEP_WAIT_FOR_SENSOR_EVENT:
@@ -295,7 +295,7 @@ class ProgramRunner:
                 if flow is not None:
                     volume_ul += (flow / 60.0) * dt  # uL/s * s = uL
 
-                time.sleep(0.1)
+                self._sleep_abortable(0.1)
 
             if fluidic_valve:
                 self.control_valve(fluidic_valve, False)
@@ -353,7 +353,7 @@ class ProgramRunner:
                 break
             p = p_start + (p_end - p_start) * i / steps
             self.gui.set_target_pressure_mbar(p)
-            time.sleep(0.2)
+            self._sleep_abortable(0.2)
 
     
     def polynomial_pressure(self, params):
@@ -546,7 +546,7 @@ class ProgramRunner:
                 else:
                     stable_counter = 0  # Reset if the flow leaves the stable range.
             # Wait before the next control iteration.
-            time.sleep(sampling_interval)
+            self._sleep_abortable(sampling_interval)
             # Exit condition for the normal non-continuous mode.
             if not continuous and stable_counter * sampling_interval >= stable_time:
                 break
@@ -717,7 +717,7 @@ class ProgramRunner:
                 else:
                     deadline = None
     
-            time.sleep(sample_interval)
+            self._sleep_abortable(sample_interval)
 
 
      
