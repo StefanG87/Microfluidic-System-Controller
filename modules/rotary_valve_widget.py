@@ -147,6 +147,36 @@ class RotaryValveQBox(QtWidgets.QGroupBox):
         except Exception:
             pass
 
+    def refresh_config_status(self) -> dict:
+        """Refresh available COM ports and probe the current connection without moving the valve."""
+        previous_ports = self._listed_com_ports()
+        self._refresh()
+        current_ports = self._listed_com_ports()
+
+        status = {
+            "ports_added": sorted(set(current_ports) - set(previous_ports)),
+            "ports_removed": sorted(set(previous_ports) - set(current_ports)),
+            "connected": self.ctl.is_connected(),
+            "reachable": None,
+            "device_status": "",
+            "error": "",
+        }
+
+        if not status["connected"]:
+            return status
+
+        try:
+            device_status = self.ctl.status()
+            status["reachable"] = True
+            status["device_status"] = device_status
+            self.lblStatus.setText("Status: " + device_status)
+        except Exception as e:
+            status["reachable"] = False
+            status["error"] = str(e)
+            self.lblStatus.setText("Status: ERROR: " + str(e))
+
+        return status
+
     def _autoconnect_if_saved(self) -> None:
         try:
             last = load_last_comport("rotary_valve")
@@ -510,6 +540,10 @@ class RotaryValveQBox(QtWidgets.QGroupBox):
                 self.cmbGoto.blockSignals(False)
             except Exception:
                 pass
+
+    def _listed_com_ports(self) -> list[str]:
+        """Return the COM ports currently shown in the widget."""
+        return [self.cmbCom.itemText(i) for i in range(self.cmbCom.count())]
 
     def _read_goto_value(self) -> Optional[int]:
         """

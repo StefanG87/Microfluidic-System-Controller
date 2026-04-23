@@ -277,6 +277,131 @@ class PressureFlowGUI(QWidget):
             self.sensor_labels[sensor.name] = label
             self.sensor_layout.addWidget(label)
 
+    @staticmethod
+    def _format_catalog_changes(label, before, after):
+        """Return short summary fragments for added or removed catalog entries."""
+        added = sorted(set(after) - set(before))
+        removed = sorted(set(before) - set(after))
+        details = []
+        if added:
+            details.append(f"{label} added: {', '.join(added)}")
+        if removed:
+            details.append(f"{label} removed: {', '.join(removed)}")
+        return details
+
+    @staticmethod
+    def _short_status_error(error_text):
+        """Keep hardware error details readable inside the config-refresh message box."""
+        text = str(error_text or "").strip()
+        if len(text) > 90:
+            return text[:87] + "..."
+        return text or "unknown error"
+
+    def _probe_pressure_controller_read(self):
+        """Check whether the internal pressure monitor can be read without changing outputs."""
+        return self.read_internal_pressure_mbar() is not None
+
+    def _probe_configured_flow_inputs(self):
+        """Check configured analog flow inputs; this verifies Modbus readability, not physical sensor identity."""
+        readable = []
+        failed = []
+        for sensor in getattr(self, "flow_sensors", []):
+            name = getattr(sensor, "name", "Flow")
+            if sensor.read_flow() is None:
+                failed.append(name)
+            else:
+                readable.append(name)
+        return {"readable": readable, "failed": failed}
+
+    def _refresh_rotary_config_status(self):
+        """Refresh rotary COM-port discovery and return a conservative communication status."""
+        box = getattr(self, "rotaryBox", None)
+        if box is None:
+            return {
+                "ports_added": [],
+                "ports_removed": [],
+                "connected": False,
+                "reachable": None,
+                "device_status": "",
+                "error": "rotary widget unavailable",
+            }
+
+        if hasattr(box, "refresh_config_status"):
+            return box.refresh_config_status()
+
+        try:
+            box._refresh()
+            return {
+                "ports_added": [],
+                "ports_removed": [],
+                "connected": bool(box.ctl.is_connected()),
+                "reachable": None,
+                "device_status": "",
+                "error": "",
+            }
+        except Exception as e:
+            return {
+                "ports_added": [],
+                "ports_removed": [],
+                "connected": False,
+                "reachable": False,
+                "device_status": "",
+                "error": str(e),
+            }
+
+    def _format_device_config_summary(
+        self,
+        old_sensors,
+        new_sensors,
+        old_actuators,
+        new_actuators,
+        pressure_readable,
+        flow_status,
+        rotary_status,
+    ):
+        """Build a concise user-facing summary for the hardware refresh result."""
+        details = []
+        details.extend(self._format_catalog_changes("sensors", old_sensors, new_sensors))
+        details.extend(self._format_catalog_changes("actuators", old_actuators, new_actuators))
+
+        if not details:
+            details.append("no catalog changes")
+
+        details.append(
+            "pressure monitor register readable"
+            if pressure_readable
+            else "pressure monitor register read failed"
+        )
+
+        flow_failed = flow_status.get("failed", [])
+        flow_readable = flow_status.get("readable", [])
+        if flow_failed:
+            details.append(f"flow input register read failed: {', '.join(flow_failed)}")
+        elif flow_readable:
+            details.append("flow input registers readable")
+        else:
+            details.append("no flow inputs configured")
+
+        if rotary_status.get("ports_added"):
+            details.append(f"rotary COM ports added: {', '.join(rotary_status['ports_added'])}")
+        if rotary_status.get("ports_removed"):
+            details.append(f"rotary COM ports removed: {', '.join(rotary_status['ports_removed'])}")
+        if not rotary_status.get("ports_added") and not rotary_status.get("ports_removed"):
+            details.append("rotary COM ports unchanged")
+
+        if rotary_status.get("connected"):
+            if rotary_status.get("reachable") is True:
+                status_text = rotary_status.get("device_status") or "responding"
+                details.append(f"rotary reachable: {status_text}")
+            elif rotary_status.get("reachable") is False:
+                details.append(f"rotary not responding: {self._short_status_error(rotary_status.get('error'))}")
+            else:
+                details.append("rotary connected")
+        else:
+            details.append("rotary not connected")
+
+        return "; ".join(details)
+
     def update_device_config(self) -> None:
         """Refresh detectable devices without changing active hardware output states."""
         if self.is_measuring or self.program_thread is not None:
@@ -288,7 +413,12 @@ class PressureFlowGUI(QWidget):
             return
 
         old_sensors = set(self.device_catalog.sensor_names())
+        old_actuators = set(self.device_catalog.actuator_names())
         try:
+            pressure_readable = self._probe_pressure_controller_read()
+            flow_status = self._probe_configured_flow_inputs()
+            rotary_status = self._refresh_rotary_config_status()
+
             previous_offsets = {
                 str(sensor.device_sn): getattr(sensor, "offset", 0.0)
                 for sensor in self.fluigent_sensors
@@ -306,11 +436,6 @@ class PressureFlowGUI(QWidget):
             self._publish_device_catalog()
             self._refresh_sensor_value_labels()
 
-            try:
-                self.rotaryBox._refresh()
-            except Exception:
-                pass
-
             if hasattr(self, "plot_area"):
                 if hasattr(self.plot_area, "refresh_fluigent_sensors"):
                     self.plot_area.refresh_fluigent_sensors(
@@ -322,14 +447,16 @@ class PressureFlowGUI(QWidget):
                     self.plot_area.fluigent_pressure_data = self.fluigent_pressure_data
 
             new_sensors = set(self.device_catalog.sensor_names())
-            added = sorted(new_sensors - old_sensors)
-            removed = sorted(old_sensors - new_sensors)
-            details = []
-            if added:
-                details.append(f"added: {', '.join(added)}")
-            if removed:
-                details.append(f"removed: {', '.join(removed)}")
-            summary = "; ".join(details) if details else "no sensor changes detected"
+            new_actuators = set(self.device_catalog.actuator_names())
+            summary = self._format_device_config_summary(
+                old_sensors,
+                new_sensors,
+                old_actuators,
+                new_actuators,
+                pressure_readable,
+                flow_status,
+                rotary_status,
+            )
             message = f"Device config refreshed ({summary})."
             self.append_log(message)
             QMessageBox.information(self, "Config Update", message)
