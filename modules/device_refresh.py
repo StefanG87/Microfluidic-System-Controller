@@ -23,6 +23,39 @@ def empty_rotary_refresh_status(
     }
 
 
+def probe_pressure_monitor(read_pressure_mbar) -> bool:
+    """Check whether the internal pressure monitor can be read without changing outputs."""
+    return read_pressure_mbar() is not None
+
+
+def probe_configured_flow_inputs(flow_sensors) -> dict:
+    """Check configured analog flow inputs; this verifies Modbus readability, not physical sensor identity."""
+    readable = []
+    failed = []
+    for sensor in flow_sensors or []:
+        name = getattr(sensor, "name", "Flow")
+        if sensor.read_flow() is None:
+            failed.append(name)
+        else:
+            readable.append(name)
+    return {"readable": readable, "failed": failed}
+
+
+def refresh_rotary_config_status(rotary_box) -> dict:
+    """Refresh rotary COM-port discovery and return a conservative communication status."""
+    if rotary_box is None:
+        return empty_rotary_refresh_status(error="rotary widget unavailable")
+
+    if hasattr(rotary_box, "refresh_config_status"):
+        return rotary_box.refresh_config_status()
+
+    try:
+        rotary_box._refresh()
+        return empty_rotary_refresh_status(connected=bool(rotary_box.ctl.is_connected()))
+    except Exception as e:
+        return empty_rotary_refresh_status(reachable=False, error=str(e))
+
+
 def summarize_device_config_refresh(
     *,
     old_sensors,

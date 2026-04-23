@@ -42,7 +42,12 @@ from modules.device_catalog import (
     valve_meta_from_profile_item,
 )
 from modules.fluigent_wrapper import detect_fluigent_sensors
-from modules.device_refresh import empty_rotary_refresh_status, summarize_device_config_refresh
+from modules.device_refresh import (
+    probe_configured_flow_inputs,
+    probe_pressure_monitor,
+    refresh_rotary_config_status,
+    summarize_device_config_refresh,
+)
 from modules.program_runner import ProgramRunner
 from modules.program_worker import ProgramWorker
 from editor.modules.editor.task_globals import update_available_sensors, update_available_valves
@@ -278,37 +283,6 @@ class PressureFlowGUI(QWidget):
             self.sensor_labels[sensor.name] = label
             self.sensor_layout.addWidget(label)
 
-    def _probe_pressure_controller_read(self):
-        """Check whether the internal pressure monitor can be read without changing outputs."""
-        return self.read_internal_pressure_mbar() is not None
-
-    def _probe_configured_flow_inputs(self):
-        """Check configured analog flow inputs; this verifies Modbus readability, not physical sensor identity."""
-        readable = []
-        failed = []
-        for sensor in getattr(self, "flow_sensors", []):
-            name = getattr(sensor, "name", "Flow")
-            if sensor.read_flow() is None:
-                failed.append(name)
-            else:
-                readable.append(name)
-        return {"readable": readable, "failed": failed}
-
-    def _refresh_rotary_config_status(self):
-        """Refresh rotary COM-port discovery and return a conservative communication status."""
-        box = getattr(self, "rotaryBox", None)
-        if box is None:
-            return empty_rotary_refresh_status(error="rotary widget unavailable")
-
-        if hasattr(box, "refresh_config_status"):
-            return box.refresh_config_status()
-
-        try:
-            box._refresh()
-            return empty_rotary_refresh_status(connected=bool(box.ctl.is_connected()))
-        except Exception as e:
-            return empty_rotary_refresh_status(reachable=False, error=str(e))
-
     def update_device_config(self) -> None:
         """Refresh detectable devices without changing active hardware output states."""
         if self.is_measuring or self.program_thread is not None:
@@ -322,9 +296,9 @@ class PressureFlowGUI(QWidget):
         old_sensors = set(self.device_catalog.sensor_names())
         old_actuators = set(self.device_catalog.actuator_names())
         try:
-            pressure_readable = self._probe_pressure_controller_read()
-            flow_status = self._probe_configured_flow_inputs()
-            rotary_status = self._refresh_rotary_config_status()
+            pressure_readable = probe_pressure_monitor(self.read_internal_pressure_mbar)
+            flow_status = probe_configured_flow_inputs(getattr(self, "flow_sensors", []))
+            rotary_status = refresh_rotary_config_status(getattr(self, "rotaryBox", None))
 
             previous_offsets = {
                 str(sensor.device_sn): getattr(sensor, "offset", 0.0)
