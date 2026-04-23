@@ -121,6 +121,75 @@ class RuntimeDeviceRegistry:
         for meta in self.valve_meta:
             self.catalog.register_actuator_descriptor(describe_valve(meta))
 
+    def get_flow_sensor_by_name(self, sensor_name):
+        """Return the configured flow channel matching an editor-visible name."""
+        for sensor in self.flow_sensors:
+            if getattr(sensor, "name", None) == sensor_name:
+                return sensor
+        return None
+
+    def get_fluigent_sensor_by_name(self, sensor_name):
+        """Return the Fluigent sensor matching an editor-visible serial name."""
+        sensor_name = str(sensor_name or "")
+        for sensor in self.fluigent_sensors:
+            device_sn = str(getattr(sensor, "device_sn", ""))
+            if sensor_name in (f"SN{device_sn}", device_sn):
+                return sensor
+        return None
+
+    def read_flow_sensor_value(self, sensor_name):
+        """Read a flow sensor by its editor-visible channel name."""
+        sensor = self.get_flow_sensor_by_name(sensor_name)
+        if sensor is None:
+            return None
+        return sensor.read_flow()
+
+    def read_fluigent_sensor_value(self, sensor_name):
+        """Read a Fluigent sensor by its editor-visible serial name."""
+        sensor = self.get_fluigent_sensor_by_name(sensor_name)
+        if sensor is None:
+            return None
+        return sensor.read_pressure()
+
+    def read_sensor_value(self, sensor_name, read_internal_pressure_mbar):
+        """Read any cataloged sensor value through the appropriate runtime adapter."""
+        descriptor = self.catalog.sensor_by_name(sensor_name)
+        if descriptor is None:
+            return None
+
+        if descriptor.kind == SENSOR_KIND_INTERNAL_PRESSURE:
+            return read_internal_pressure_mbar()
+
+        if descriptor.kind == SENSOR_KIND_FLOW:
+            return self.read_flow_sensor_value(descriptor.name)
+
+        if descriptor.kind == SENSOR_KIND_FLUIGENT_PRESSURE:
+            return self.read_fluigent_sensor_value(descriptor.name)
+
+        return None
+
+    def zero_fluigent_sensors_by_name(self, selected_sns=None):
+        """Zero selected Fluigent sensors and return successful and failed serial names."""
+        if selected_sns is None:
+            selected_sns = set()
+        elif isinstance(selected_sns, str):
+            selected_sns = {selected_sns}
+        else:
+            selected_sns = {str(sensor_name) for sensor_name in selected_sns}
+        zeroed = []
+        failed = []
+        for sensor in self.fluigent_sensors:
+            device_sn = str(getattr(sensor, "device_sn", ""))
+            sensor_tag = f"SN{device_sn}"
+            if selected_sns and sensor_tag not in selected_sns and device_sn not in selected_sns:
+                continue
+            try:
+                sensor.set_zero()
+                zeroed.append(sensor_tag)
+            except Exception as exc:
+                failed.append((sensor_tag, exc))
+        return zeroed, failed
+
     def refresh_detectable_devices(
         self,
         read_pressure_mbar,

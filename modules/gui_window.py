@@ -24,9 +24,6 @@ from modules.flow_sensor import SensirionFlowSensor
 from modules.measurement_session import MeasurementSession
 from modules.device_catalog import (
     SENSOR_NAME_INTERNAL,
-    SENSOR_KIND_FLOW,
-    SENSOR_KIND_FLUIGENT_PRESSURE,
-    SENSOR_KIND_INTERNAL_PRESSURE,
     UNIT_FLOW_UL_MIN,
     UNIT_PRESSURE_MBAR,
     valve_meta_from_profile_item,
@@ -775,57 +772,26 @@ class PressureFlowGUI(QWidget):
 
     def get_fluigent_sensor_by_name(self, sensor_name):
         """Return the Fluigent sensor matching an editor-visible serial name."""
-        for sensor in getattr(self, "fluigent_sensors", []):
-            if f"SN{sensor.device_sn}" == sensor_name:
-                return sensor
-        return None
+        return self.runtime_devices.get_fluigent_sensor_by_name(sensor_name)
 
     def read_fluigent_sensor_value(self, sensor_name):
         """Read a Fluigent sensor by its editor-visible serial name."""
-        sensor = self.get_fluigent_sensor_by_name(sensor_name)
-        if sensor is None:
-            return None
-        return sensor.read_pressure()
+        return self.runtime_devices.read_fluigent_sensor_value(sensor_name)
 
     def zero_fluigent_sensors_by_name(self, selected_sns=None):
         """Zero selected Fluigent sensors and return successful and failed serial names."""
-        selected_sns = selected_sns or []
-        zeroed = []
-        failed = []
-        for sensor in getattr(self, "fluigent_sensors", []):
-            sensor_tag = f"SN{sensor.device_sn}"
-            if selected_sns and sensor_tag not in selected_sns and str(sensor.device_sn) not in selected_sns:
-                continue
-            try:
-                sensor.set_zero()
-                zeroed.append(sensor_tag)
-            except Exception as exc:
-                failed.append((sensor_tag, exc))
-        return zeroed, failed
+        return self.runtime_devices.zero_fluigent_sensors_by_name(selected_sns)
 
     def read_flow_sensor_value(self, sensor_name):
         """Read a flow sensor by its editor-visible channel name."""
-        for sensor in getattr(self, "flow_sensors", []):
-            if sensor.name == sensor_name:
-                return sensor.read_flow()
-        return None
+        return self.runtime_devices.read_flow_sensor_value(sensor_name)
 
     def read_program_sensor_value(self, sensor_name):
         """Read any sensor name used by automation programs."""
-        descriptor = self.device_catalog.sensor_by_name(sensor_name)
-        if descriptor is None:
-            return None
-
-        if descriptor.kind == SENSOR_KIND_INTERNAL_PRESSURE:
-            return self.read_internal_pressure_mbar()
-
-        if descriptor.kind == SENSOR_KIND_FLOW:
-            return self.read_flow_sensor_value(descriptor.name)
-
-        if descriptor.kind == SENSOR_KIND_FLUIGENT_PRESSURE:
-            return self.read_fluigent_sensor_value(descriptor.name)
-
-        return None
+        return self.runtime_devices.read_sensor_value(
+            sensor_name,
+            self.read_internal_pressure_mbar,
+        )
 
     def set_valve_state_by_index(self, index, state):
         """Set a valve by hardware-list index without adding UI or log side effects."""
