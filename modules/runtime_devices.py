@@ -51,6 +51,7 @@ class RuntimeDeviceRegistry:
         self.flow_sensors = []
         self.fluigent_sensors = []
         self.rotary_widget = None
+        self.valves = []
         self.valve_meta = []
 
     def set_pressure_source(self, pressure_source) -> None:
@@ -72,6 +73,12 @@ class RuntimeDeviceRegistry:
     def set_valve_meta(self, valve_meta) -> None:
         """Store profile-derived valve metadata in GUI/automation order."""
         self.valve_meta = list(valve_meta or [])
+
+    def set_valves(self, valves, valve_meta=None) -> None:
+        """Store profile-derived valve objects and optional matching metadata."""
+        self.valves = list(valves or [])
+        if valve_meta is not None:
+            self.set_valve_meta(valve_meta)
 
     def rebuild_catalog(self) -> None:
         """Rebuild all device descriptors from current runtime references."""
@@ -120,6 +127,35 @@ class RuntimeDeviceRegistry:
         self.catalog.clear_actuators(ACTUATOR_KIND_VALVE)
         for meta in self.valve_meta:
             self.catalog.register_actuator_descriptor(describe_valve(meta))
+
+    def set_valve_state_by_index(self, index, state):
+        """Set a valve by hardware-list index using the established coil-write path."""
+        valve = self.valves[index]
+        valve.bus.write_coil(valve.address, bool(state))
+        valve.state = int(bool(state))
+        return valve
+
+    def set_valve_state_by_name(self, valve_name, state, available_valves=None):
+        """Set a valve using an editor-visible name list aligned with hardware order."""
+        valve_names = (
+            list(available_valves)
+            if available_valves is not None
+            else self.catalog.valve_names()
+        )
+        if valve_name not in valve_names:
+            return False
+        index = valve_names.index(valve_name)
+        self.set_valve_state_by_index(index, state)
+        return True
+
+    def close_all_valves(self) -> None:
+        """Close every configured valve without changing pressure."""
+        for index in range(len(self.valves)):
+            self.set_valve_state_by_index(index, False)
+
+    def read_valve_states(self) -> list:
+        """Return current valve states in the GUI/profile order."""
+        return [valve.get_state() for valve in self.valves]
 
     def get_flow_sensor_by_name(self, sensor_name):
         """Return the configured flow channel matching an editor-visible name."""

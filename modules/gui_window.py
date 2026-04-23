@@ -365,7 +365,7 @@ class PressureFlowGUI(QWidget):
                 self.valves.append(v)
                 meta = valve_meta_from_profile_item(group, item)
                 self._valve_meta.append(meta)
-        self.runtime_devices.set_valve_meta(self._valve_meta)
+        self.runtime_devices.set_valves(self.valves, self._valve_meta)
         self.runtime_devices.register_valves()
     
         # Publish the editor-visible valve names in the same order used by the GUI.
@@ -795,23 +795,19 @@ class PressureFlowGUI(QWidget):
 
     def set_valve_state_by_index(self, index, state):
         """Set a valve by hardware-list index without adding UI or log side effects."""
-        valve = self.valves[index]
-        valve.bus.write_coil(valve.address, bool(state))
-        valve.state = int(bool(state))
-        return valve
+        return self.runtime_devices.set_valve_state_by_index(index, state)
 
     def set_valve_state_by_name(self, valve_name, state, available_valves):
         """Set a valve using the editor-visible valve order."""
-        if valve_name not in available_valves:
-            return False
-        index = available_valves.index(valve_name)
-        self.set_valve_state_by_index(index, state)
-        return True
+        return self.runtime_devices.set_valve_state_by_name(
+            valve_name,
+            state,
+            available_valves,
+        )
 
     def close_all_valves(self):
         """Close every configured valve without changing pressure."""
-        for index in range(len(self.valves)):
-            self.set_valve_state_by_index(index, False)
+        self.runtime_devices.close_all_valves()
 
     def start_measurement_from_program(self, sampling_interval_ms=None):
         """Start a measurement from an automation program without user confirmation."""
@@ -1162,7 +1158,7 @@ class PressureFlowGUI(QWidget):
             )
     
         # --- Capture valve states ---
-        self.measurement_session.append_valve_states(v.get_state() for v in self.valves)
+        self.measurement_session.append_valve_states(self.runtime_devices.read_valve_states())
         self._sync_valve_buttons()
     
         # --- Read flow sensors ---

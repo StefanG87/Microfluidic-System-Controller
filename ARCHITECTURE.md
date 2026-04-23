@@ -88,6 +88,7 @@ Important boundaries now in place:
 - Generic future measurement channels can be registered in `MeasurementSession` as named extra series so they become CSV columns without changing the established pressure/flow/valve export format.
 - Runtime device references are grouped in `RuntimeDeviceRegistry`, which rebuilds `DeviceCatalog` descriptors before the GUI publishes names to editor dialogs. Existing hardware modules expose catalog descriptors through this central layer instead of duplicating device metadata in the GUI.
 - Program-facing sensor reads go through `RuntimeDeviceRegistry`, while `PressureFlowGUI` keeps compatibility wrapper methods for existing runner calls.
+- Program-facing valve commands go through `RuntimeDeviceRegistry`, while GUI wrapper methods keep the existing `ProgramRunner` interface stable.
 - Manual config refreshes are coordinated by `RuntimeDeviceRegistry`: the GUI asks for a refresh, then updates measurement buffers, labels, plots, and editor globals from the refreshed catalog.
 - The main GUI `Update Config` button refreshes detected sensors and editor-visible device lists only when no measurement or program is active.
 - Program step names and parameter keys are centralized in `program_contract.py`.
@@ -102,7 +103,7 @@ Strong couplings that still exist:
 
 - `PressureFlowGUI` still owns UI widgets, hardware object construction, plotting coordination, export orchestration, and program bootstrapping.
 - Editor device availability is still published through mutable module-level state in `task_globals.py`.
-- Periodic measurement sampling still reads built-in devices directly in the GUI update loop.
+- Periodic measurement sampling still reads pressure, flow, and Fluigent values directly in the GUI update loop.
 - Import/resource setup still partly depends on startup-time path bootstrapping for local execution and bundled SDK compatibility.
 - Some hardware error paths are intentionally broad to keep the lab GUI alive, but they can hide root causes if logs are not inspected.
 
