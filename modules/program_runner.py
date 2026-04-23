@@ -274,32 +274,56 @@ class ProgramRunner:
             target_volume = float(params.get(PARAM_TARGET_VOLUME, 0.0))
             input_pressure = float(params.get(PARAM_INPUT_PRESSURE, 0.0))
 
-            if pneumatic_valve:
-                self.control_valve(pneumatic_valve, True)
-            if fluidic_valve:
-                self.control_valve(fluidic_valve, True)
+            if target_volume <= 0.0:
+                self._log("Dose Volume skipped: target volume must be greater than 0 uL.")
+                return
+            if not sensor_name:
+                self._log("Dose Volume aborted: no flow sensor configured.")
+                return
 
-            self.gui.set_target_pressure_mbar(input_pressure)
-            self._log(f"Input pressure set to {input_pressure} mbar")
-
+            missing_flow_limit = 10
+            missing_flow_reads = 0
             volume_ul = 0.0
             last_time = time.time()
-            self._log(f"Dosing target: {target_volume} uL")
+            opened_fluidic_valve = False
 
-            while self.running and volume_ul < target_volume:
-                flow = self.get_flow_value(sensor_name)  # uL/min
-                now = time.time()
-                dt = now - last_time
-                last_time = now
+            try:
+                if pneumatic_valve:
+                    self.control_valve(pneumatic_valve, True)
+                if fluidic_valve:
+                    self.control_valve(fluidic_valve, True)
+                    opened_fluidic_valve = True
 
-                if flow is not None:
-                    volume_ul += (flow / 60.0) * dt  # uL/s * s = uL
+                self.gui.set_target_pressure_mbar(input_pressure)
+                self._log(f"Input pressure set to {input_pressure} mbar")
+                self._log(f"Dosing target: {target_volume} uL")
 
-                self._sleep_abortable(0.1)
+                while self.running and volume_ul < target_volume:
+                    flow = self.get_flow_value(sensor_name)  # uL/min
+                    now = time.time()
+                    dt = now - last_time
+                    last_time = now
 
-            if fluidic_valve:
-                self.control_valve(fluidic_valve, False)
-            self._log(f"Dose complete: {volume_ul:.1f} uL (target: {target_volume} uL)")
+                    if flow is None:
+                        missing_flow_reads += 1
+                        if missing_flow_reads >= missing_flow_limit:
+                            self._log(
+                                f"Dose Volume aborted: flow sensor {sensor_name} is not responding."
+                            )
+                            return
+                    else:
+                        missing_flow_reads = 0
+                        volume_ul += (flow / 60.0) * dt  # uL/s * s = uL
+
+                    self._sleep_abortable(0.1)
+
+                if self.running:
+                    self._log(f"Dose complete: {volume_ul:.1f} uL (target: {target_volume} uL)")
+                else:
+                    self._log(f"Dose Volume stopped at {volume_ul:.1f} uL (target: {target_volume} uL)")
+            finally:
+                if opened_fluidic_valve:
+                    self.control_valve(fluidic_valve, False)
             return
 
         elif type_ == STEP_ROTARY_VALVE:
