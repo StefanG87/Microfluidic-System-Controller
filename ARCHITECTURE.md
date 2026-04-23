@@ -21,7 +21,9 @@ The main runtime window is `PressureFlowGUI` in `modules/gui_window.py`. The pro
 
 - `modules/gui_window.py`: main controller window, hardware lifecycle, runtime state, GUI callbacks, and automation bridge methods.
 - `modules/measurement_session.py`: owner for live measurement buffers, generic extra measurement series, and export snapshots.
-- `modules/device_catalog.py`: lightweight runtime catalog for editor-visible sensors and actuators.
+- `modules/device_catalog.py`: lightweight catalog for editor-visible sensors and actuators.
+- `modules/runtime_devices.py`: runtime device registry that owns active hardware references, rebuilds the device catalog, and coordinates manual device refreshes.
+- `modules/device_refresh.py`: conservative hardware-refresh probes and user-facing refresh summaries.
 - `modules/plot_area.py`: Matplotlib-based live plot widget.
 - `modules/sampling_manager.py`: shared time base and sampling interval dialog.
 - `modules/export_dialog.py`: manual and programmatic CSV writer UI.
@@ -84,7 +86,8 @@ Important boundaries now in place:
 
 - Measurement buffers are grouped in `MeasurementSession` instead of being owned only as loose GUI lists.
 - Generic future measurement channels can be registered in `MeasurementSession` as named extra series so they become CSV columns without changing the established pressure/flow/valve export format.
-- Runtime device names, units, profile-derived valve metadata, and default editor fallback devices are grouped in `DeviceCatalog` before being published to editor dialogs. Existing hardware modules expose catalog descriptors through this central layer instead of duplicating device metadata in the GUI.
+- Runtime device references are grouped in `RuntimeDeviceRegistry`, which rebuilds `DeviceCatalog` descriptors before the GUI publishes names to editor dialogs. Existing hardware modules expose catalog descriptors through this central layer instead of duplicating device metadata in the GUI.
+- Manual config refreshes are coordinated by `RuntimeDeviceRegistry`: the GUI asks for a refresh, then updates measurement buffers, labels, plots, and editor globals from the refreshed catalog.
 - The main GUI `Update Config` button refreshes detected sensors and editor-visible device lists only when no measurement or program is active.
 - Program step names and parameter keys are centralized in `program_contract.py`.
 - Pressure-profile math and preview data are centralized in `polynomial_pressure.py`.
@@ -96,7 +99,7 @@ Important boundaries now in place:
 
 Strong couplings that still exist:
 
-- `PressureFlowGUI` still owns UI widgets, hardware objects, runtime state, plotting coordination, export orchestration, and program bootstrapping.
+- `PressureFlowGUI` still owns UI widgets, hardware object construction, plotting coordination, export orchestration, and program bootstrapping.
 - Editor device availability is still published through mutable module-level state in `task_globals.py`.
 - Import/resource setup still partly depends on startup-time path bootstrapping for local execution and bundled SDK compatibility.
 - Some hardware error paths are intentionally broad to keep the lab GUI alive, but they can hide root causes if logs are not inspected.
@@ -109,12 +112,12 @@ Recommended sequence:
 
 1. Implement the hardware adapter in its own module, for example `syringe_pump.py` or `balance.py`.
 2. Add descriptor constants/helpers in `DeviceCatalog` so GUI, editor, CSV, and automation code do not duplicate display names, units, or profile metadata.
-3. Register editor-visible device names in `DeviceCatalog` using a stable role such as `syringe_pump` or `weight`.
+3. Add the runtime object to `RuntimeDeviceRegistry` so it can rebuild `DeviceCatalog` consistently using a stable role such as `syringe_pump` or `weight`.
 4. Add measurement buffers only if the device produces time-series data that must be plotted or exported.
 5. Add editor/program-contract constants only when the device needs automation steps.
 6. Keep GUI widgets as thin controls around the adapter; avoid embedding protocol logic in `gui_window.py`.
 
-For example, a balance should become a sensor adapter plus a `weight` catalog entry before it becomes a plot or CSV column. Once it produces live values, register a named extra series in `MeasurementSession` so the CSV exporter can add a stable `Weight [...]` column. A syringe pump should become an actuator adapter plus a `syringe_pump` catalog entry before it gets editor tasks.
+For example, a balance should become a sensor adapter plus a `weight` catalog entry managed by `RuntimeDeviceRegistry` before it becomes a plot or CSV column. Once it produces live values, register a named extra series in `MeasurementSession` so the CSV exporter can add a stable `Weight [...]` column. A syringe pump should become an actuator adapter plus a `syringe_pump` catalog entry before it gets editor tasks.
 
 ## Hardware Safety Notes
 
@@ -136,7 +139,7 @@ Historical notes are kept for context only and should not be treated as current 
 
 ## Recommended Next Refactor Direction
 
-1. Keep `PressureFlowGUI` as the main window, but move narrow responsibilities into helpers only when that reduces risk.
+1. Keep `PressureFlowGUI` as the main window, but route new hardware discovery and catalog registration through `RuntimeDeviceRegistry`.
 2. Keep `program_contract.py` and `polynomial_pressure.py` as the source of truth when new automation parameters are added.
 3. Reduce broad exception swallowing in high-value paths where clearer logging can preserve stability without hiding root causes.
 4. Keep project-root and resource bootstrapping minimal now that PyInstaller resource lookup has a shared helper.
