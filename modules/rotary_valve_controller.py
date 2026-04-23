@@ -57,6 +57,7 @@ class RotaryValveController:
                 _init_sequence()
     
             self._rvm = rvm
+            self._connected_port = com_port
             self._com = com_port
             self._desired_positions = positions
 
@@ -73,6 +74,28 @@ class RotaryValveController:
                 finally:
                     self._rvm = None
                     self._connected_port = None
+                    self._com = None
+
+    def release_connection(self) -> None:
+        """Release a stale serial handle after communication is lost, without sending valve commands."""
+        with self._lock:
+            rvm = self._rvm
+            self._rvm = None
+            self._connected_port = None
+            self._com = None
+            if rvm is None:
+                return
+
+            serial_port = getattr(rvm, "ser", None)
+            if serial_port is not None:
+                try:
+                    serial_port.close()
+                except Exception:
+                    pass
+            try:
+                rvm.ser = None
+            except Exception:
+                pass
 
     # -------------- motion --------------
 

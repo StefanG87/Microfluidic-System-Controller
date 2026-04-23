@@ -162,7 +162,12 @@ class RotaryValveQBox(QtWidgets.QGroupBox):
             "error": "",
         }
 
+        if self._busy or self._thread_alive():
+            status["error"] = "rotary operation active"
+            return status
+
         if not status["connected"]:
+            self._set_enabled(False)
             return status
 
         try:
@@ -170,10 +175,12 @@ class RotaryValveQBox(QtWidgets.QGroupBox):
             status["reachable"] = True
             status["device_status"] = device_status
             self.lblStatus.setText("Status: " + device_status)
+            self._set_enabled(True)
         except Exception as e:
             status["reachable"] = False
             status["error"] = str(e)
             self.lblStatus.setText("Status: ERROR: " + str(e))
+            self._release_stale_connection()
 
         return status
 
@@ -440,6 +447,32 @@ class RotaryValveQBox(QtWidgets.QGroupBox):
     def _thread_cleared(self, *_) -> None:
         self._worker_thread = None
         self._worker = None
+
+    def _release_stale_connection(self) -> None:
+        """Mark a lost rotary connection as disconnected so the user can reconnect."""
+        try:
+            self.pause_polling()
+        except Exception:
+            pass
+        try:
+            self.ctl.release_connection()
+        except Exception:
+            try:
+                self.ctl.disconnect()
+            except Exception:
+                pass
+
+        self._busy = False
+        self._pending_port = None
+        self.lblN.setText("N: -")
+        self.lblPos.setText("Pos: -")
+        self.lblActive.setText("Active: -")
+        self.lblActive.setStyleSheet("")
+        if self._last_active != 0:
+            self._last_active = 0
+            self.activeChanged.emit(0)
+        self.movedFinished.emit(0)
+        self._set_enabled(False)
 
     # ------------- lifecycle -------------
 
