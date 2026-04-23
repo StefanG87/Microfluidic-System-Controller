@@ -45,6 +45,7 @@ from modules.fluigent_wrapper import detect_fluigent_sensors
 from modules.device_refresh import (
     probe_configured_flow_inputs,
     probe_pressure_monitor,
+    refresh_fluigent_sensor_list,
     refresh_rotary_config_status,
     summarize_device_config_refresh,
 )
@@ -300,13 +301,10 @@ class PressureFlowGUI(QWidget):
             flow_status = probe_configured_flow_inputs(getattr(self, "flow_sensors", []))
             rotary_status = refresh_rotary_config_status(getattr(self, "rotaryBox", None))
 
-            previous_offsets = {
-                str(sensor.device_sn): getattr(sensor, "offset", 0.0)
-                for sensor in self.fluigent_sensors
-            }
-            self.fluigent_sensors = detect_fluigent_sensors(force_reinit=True)
-            for sensor in self.fluigent_sensors:
-                sensor.offset = previous_offsets.get(str(sensor.device_sn), sensor.offset)
+            self.fluigent_sensors = refresh_fluigent_sensor_list(
+                self.fluigent_sensors,
+                detect_fluigent_sensors,
+            )
 
             self.measurement_session.set_fluigent_channel_count(len(self.fluigent_sensors))
             self._bind_measurement_buffers()

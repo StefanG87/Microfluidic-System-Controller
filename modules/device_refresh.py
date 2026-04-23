@@ -56,6 +56,22 @@ def refresh_rotary_config_status(rotary_box) -> dict:
         return empty_rotary_refresh_status(reachable=False, error=str(e))
 
 
+def refresh_fluigent_sensor_list(current_sensors, detect_sensors):
+    """Run a fresh Fluigent scan while preserving software zero offsets by serial number."""
+    previous_offsets = {
+        str(getattr(sensor, "device_sn", "")): getattr(sensor, "offset", 0.0)
+        for sensor in current_sensors or []
+        if str(getattr(sensor, "device_sn", ""))
+    }
+
+    refreshed_sensors = detect_sensors(force_reinit=True)
+    for sensor in refreshed_sensors:
+        sensor_key = str(getattr(sensor, "device_sn", ""))
+        if sensor_key in previous_offsets:
+            sensor.offset = previous_offsets[sensor_key]
+    return refreshed_sensors
+
+
 def summarize_device_config_refresh(
     *,
     old_sensors,
