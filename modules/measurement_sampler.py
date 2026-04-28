@@ -15,6 +15,7 @@ class MeasurementSample:
     corrected_pressure: float
     flow_values: list[tuple[str, float]]
     fluigent_values: list[tuple[str, float]]
+    extra_values: list[tuple[str, object, str]]
     rotary_active: int | None
 
 
@@ -52,6 +53,7 @@ class MeasurementSampler:
 
         flow_values = self._append_flow_values()
         fluigent_values = self._append_fluigent_values()
+        extra_values = self._append_extra_values()
 
         self.measurement_session.append_rotary_active(rotary_active)
 
@@ -62,6 +64,7 @@ class MeasurementSampler:
             corrected_pressure=corrected_pressure,
             flow_values=flow_values,
             fluigent_values=fluigent_values,
+            extra_values=extra_values,
             rotary_active=rotary_active,
         )
 
@@ -92,4 +95,21 @@ class MeasurementSampler:
             device_sn = getattr(sensor, "device_sn", "")
             label = f"SN{device_sn}" if device_sn else f"Fluigent {index + 1}"
             values.append((label, value))
+        return values
+
+    def _append_extra_values(self) -> list[tuple[str, object, str]]:
+        """Read generic measurement channels and append them for CSV export."""
+        values = []
+        for channel in self.runtime_devices.measurement_channels:
+            name = str(getattr(channel, "name", "")).strip()
+            if not name:
+                continue
+            unit = str(getattr(channel, "unit", "") or "").strip()
+            try:
+                value = channel.read()
+            except Exception:
+                value = None
+            self.measurement_session.register_extra_series(name, unit)
+            self.measurement_session.append_extra_value(name, value)
+            values.append((name, value, unit))
         return values

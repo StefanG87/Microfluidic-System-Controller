@@ -90,6 +90,7 @@ Important boundaries now in place:
 - Measurement acquisition is handled by `MeasurementSampler`; `PressureFlowGUI.update_data()` now keeps the UI-facing label and plot refresh responsibilities.
 - Generic future measurement channels can be registered in `MeasurementSession` as named extra series so they become CSV columns without changing the established pressure/flow/valve export format.
 - Runtime device references are grouped in `RuntimeDeviceRegistry`, which rebuilds `DeviceCatalog` descriptors before the GUI publishes names to editor dialogs. Existing hardware modules expose catalog descriptors through this central layer instead of duplicating device metadata in the GUI.
+- Optional runtime adapters can publish generic sampled channels through `RuntimeDeviceRegistry.add_measurement_channel()`. `MeasurementSampler` records these channels into `MeasurementSession.extra_series` so CSV export includes them automatically.
 - Program-facing sensor reads go through `RuntimeDeviceRegistry`, while `PressureFlowGUI` keeps compatibility wrapper methods for existing runner calls.
 - Program-facing valve commands go through `RuntimeDeviceRegistry`, while GUI wrapper methods keep the existing `ProgramRunner` interface stable.
 - Manual config refreshes are coordinated by `RuntimeDeviceRegistry`: the GUI asks for a refresh, then updates measurement buffers, labels, plots, and editor globals from the refreshed catalog.
@@ -123,7 +124,7 @@ Recommended sequence:
 5. Add editor/program-contract constants only when the device needs automation steps.
 6. Keep GUI widgets as thin controls around the adapter; avoid embedding protocol logic in `gui_window.py`.
 
-For example, a balance should become a sensor adapter plus a `weight` catalog entry managed by `RuntimeDeviceRegistry` before it becomes a plot or CSV column. Once it produces live values, register a named extra series in `MeasurementSession` so the CSV exporter can add a stable `Weight [...]` column. A syringe pump should become an actuator adapter plus a `syringe_pump` catalog entry before it gets editor tasks.
+For example, a balance should become a sensor adapter plus a `weight` catalog entry managed by `RuntimeDeviceRegistry`. Once it produces live values, register it through `RuntimeDeviceRegistry.add_measurement_channel(name="Weight", unit="g", kind=SENSOR_KIND_WEIGHT, read_value=adapter.read_weight_g)` so `MeasurementSampler` records a stable `Weight [g]` CSV column. A syringe pump should become an actuator adapter plus a `syringe_pump` catalog entry before it gets editor tasks; if it also produces telemetry, expose that telemetry as generic measurement channels.
 
 ## Hardware Safety Notes
 

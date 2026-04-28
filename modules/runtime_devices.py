@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 
 from modules.device_catalog import (
     ACTUATOR_KIND_PRESSURE_CONTROLLER,
@@ -11,10 +12,12 @@ from modules.device_catalog import (
     DeviceCatalog,
     SENSOR_KIND_FLOW,
     SENSOR_KIND_FLUIGENT_PRESSURE,
+    SENSOR_KIND_GENERIC_MEASUREMENT,
     SENSOR_KIND_INTERNAL_PRESSURE,
     describe_flow_sensor,
     describe_fluigent_sensor,
     describe_internal_pressure_sensor,
+    describe_measurement_channel,
     describe_pressure_controller,
     describe_rotary_valve,
     describe_valve,
@@ -42,6 +45,24 @@ class DeviceRefreshResult:
     summary: str
 
 
+@dataclass(frozen=True)
+class RuntimeMeasurementChannel:
+    """Generic sampled channel supplied by future runtime adapters."""
+
+    name: str
+    unit: str = ""
+    read_value: Callable[[], float | int | str | None] | None = None
+    kind: str = SENSOR_KIND_GENERIC_MEASUREMENT
+    source: str = ""
+    metadata: dict = field(default_factory=dict)
+
+    def read(self):
+        """Read one value from the channel, returning None if no reader is available."""
+        if self.read_value is None:
+            return None
+        return self.read_value()
+
+
 class RuntimeDeviceRegistry:
     """Own runtime hardware references and publish them through a DeviceCatalog."""
 
@@ -53,6 +74,8 @@ class RuntimeDeviceRegistry:
         self.rotary_widget = None
         self.valves = []
         self.valve_meta = []
+        self.measurement_channels = []
+        self._measurement_channel_kinds = {SENSOR_KIND_GENERIC_MEASUREMENT}
 
     def set_pressure_source(self, pressure_source) -> None:
         """Store the pressure controller used as actuator and internal monitor."""
@@ -80,6 +103,33 @@ class RuntimeDeviceRegistry:
         if valve_meta is not None:
             self.set_valve_meta(valve_meta)
 
+    def set_measurement_channels(self, channels) -> None:
+        """Store generic sampled channels provided by optional runtime modules."""
+        self.measurement_channels = list(channels or [])
+
+    def add_measurement_channel(
+        self,
+        name,
+        unit="",
+        read_value=None,
+        *,
+        kind=SENSOR_KIND_GENERIC_MEASUREMENT,
+        source="",
+        **metadata,
+    ) -> RuntimeMeasurementChannel:
+        """Create, store, and publish one generic sampled channel."""
+        channel = RuntimeMeasurementChannel(
+            name=str(name),
+            unit=str(unit or ""),
+            read_value=read_value,
+            kind=str(kind or SENSOR_KIND_GENERIC_MEASUREMENT),
+            source=str(source or ""),
+            metadata=dict(metadata),
+        )
+        self.measurement_channels.append(channel)
+        self.register_measurement_channels()
+        return channel
+
     def rebuild_catalog(self) -> None:
         """Rebuild all device descriptors from current runtime references."""
         self.catalog.clear_sensors()
@@ -89,6 +139,7 @@ class RuntimeDeviceRegistry:
         self.register_rotary_valve()
         self.register_flow_sensors()
         self.register_fluigent_sensors()
+        self.register_measurement_channels()
 
     def register_pressure_controller(self) -> None:
         """Register the pressure controller as actuator and internal pressure sensor."""
@@ -114,6 +165,18 @@ class RuntimeDeviceRegistry:
         self.catalog.clear_sensors(SENSOR_KIND_FLUIGENT_PRESSURE)
         for index, sensor in enumerate(self.fluigent_sensors):
             self.catalog.register_sensor_descriptor(describe_fluigent_sensor(sensor, index))
+
+    def register_measurement_channels(self) -> None:
+        """Register optional generic sampled channels for editor labels and CSV export."""
+        channel_kinds = {
+            str(getattr(channel, "kind", SENSOR_KIND_GENERIC_MEASUREMENT))
+            for channel in self.measurement_channels
+        }
+        channel_kinds.add(SENSOR_KIND_GENERIC_MEASUREMENT)
+        self.catalog.clear_sensors(self._measurement_channel_kinds | channel_kinds)
+        for index, channel in enumerate(self.measurement_channels):
+            self.catalog.register_sensor_descriptor(describe_measurement_channel(channel, index))
+        self._measurement_channel_kinds = channel_kinds
 
     def register_rotary_valve(self) -> None:
         """Register the rotary valve stack as one runtime actuator."""
@@ -201,6 +264,10 @@ class RuntimeDeviceRegistry:
 
         if descriptor.kind == SENSOR_KIND_FLUIGENT_PRESSURE:
             return self.read_fluigent_sensor_value(descriptor.name)
+
+        for channel in self.measurement_channels:
+            if getattr(channel, "name", None) == descriptor.name:
+                return channel.read()
 
         return None
 

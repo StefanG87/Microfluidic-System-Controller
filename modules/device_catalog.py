@@ -9,6 +9,7 @@ from typing import Any, Iterable
 
 SENSOR_KIND_FLOW = "flow"
 SENSOR_KIND_FLUIGENT_PRESSURE = "fluigent_pressure"
+SENSOR_KIND_GENERIC_MEASUREMENT = "generic_measurement"
 SENSOR_KIND_INTERNAL_PRESSURE = "internal_pressure"
 SENSOR_KIND_WEIGHT = "weight"
 
@@ -23,12 +24,14 @@ ACTUATOR_NAME_ROTARY_VALVE = "Rotary Valve"
 
 UNIT_PRESSURE_MBAR = "mbar"
 UNIT_FLOW_UL_MIN = "uL/min"
+UNIT_WEIGHT_G = "g"
 
 SENSOR_KIND_ORDER = (
     SENSOR_KIND_INTERNAL_PRESSURE,
     SENSOR_KIND_FLOW,
     SENSOR_KIND_FLUIGENT_PRESSURE,
     SENSOR_KIND_WEIGHT,
+    SENSOR_KIND_GENERIC_MEASUREMENT,
 )
 ACTUATOR_KIND_ORDER = (
     ACTUATOR_KIND_PRESSURE_CONTROLLER,
@@ -300,6 +303,19 @@ def describe_fluigent_sensor(sensor, index: int) -> SensorDescriptor:
             "index": index,
             "device_sn": device_sn,
         },
+    )
+
+
+def describe_measurement_channel(channel, index: int) -> SensorDescriptor:
+    """Describe a generic sampled measurement channel supplied by a runtime adapter."""
+    metadata = dict(getattr(channel, "metadata", {}) or {})
+    metadata.setdefault("index", index)
+    return SensorDescriptor(
+        name=str(getattr(channel, "name", f"Measurement {index + 1}")),
+        kind=str(getattr(channel, "kind", SENSOR_KIND_GENERIC_MEASUREMENT)),
+        unit=str(getattr(channel, "unit", "")),
+        source=str(getattr(channel, "source", "")),
+        metadata=metadata,
     )
 
 

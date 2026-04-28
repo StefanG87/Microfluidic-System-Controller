@@ -1163,6 +1163,17 @@ class PressureFlowGUI(QWidget):
             if label_key in self.sensor_labels:
                 self.sensor_labels[label_key].setText(f"{label_key}: {value:.1f} {UNIT_PRESSURE_MBAR}")
 
+        for label_key, value, unit in sample.extra_values:
+            if label_key in self.sensor_labels:
+                suffix = f" {unit}" if unit else ""
+                if value in ("", None):
+                    display_value = "--"
+                elif isinstance(value, (int, float)):
+                    display_value = f"{value:.3f}"
+                else:
+                    display_value = str(value)
+                self.sensor_labels[label_key].setText(f"{label_key}: {display_value}{suffix}")
+
         self.label_display.setText(
             f"Measured: {sample.measured_pressure:.1f} | "
             f"Corrected: {sample.corrected_pressure:.1f} mbar | Offset: {self.offset:.1f} mbar"
