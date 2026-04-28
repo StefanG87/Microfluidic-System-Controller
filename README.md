@@ -84,7 +84,13 @@ before running the installer if another local location is preferred.
 On a lab computer, the repository can stay on the network drive. Only the
 Python environments are created locally per Windows user in `%LOCALAPPDATA%`.
 `start_v3.bat` now creates the local v3 environment automatically if it is
-missing, runs a quick import check, and keeps the console open if startup fails.
+missing, runs a quick import check, and keeps the console open after exit so
+startup errors remain visible. Use `start_v3_close_when_done.bat` only when the
+launcher should close automatically after the GUI exits.
+
+For normal lab use, double-click `Launch_MF_Controller_v3.bat`. It wraps the v3
+starter in a visible console window and avoids Spyder or any active Python
+environment.
 
 To install both the classic PyQt5 environment and the v3 PySide6 environment,
 use:

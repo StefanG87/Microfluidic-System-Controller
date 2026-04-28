@@ -34,6 +34,13 @@ echo Repository: %CD%
 echo Environment root: %MF_CONTROLLER_ENV_ROOT%
 echo.
 
+where py >nul 2>nul
+if errorlevel 1 (
+    echo Python launcher not found: py
+    echo Install Python 3 or start the installer from a Python environment that provides py.exe.
+    goto fail
+)
+
 if /I not "%MODE%"=="v3" (
     call :install_env "%MF_CLASSIC_ENV%" "requirements.txt" "classic PyQt5 runtime"
     if errorlevel 1 goto fail
