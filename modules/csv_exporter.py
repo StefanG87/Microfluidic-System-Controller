@@ -49,6 +49,25 @@ class CSVExporter:
         return [f"Pressure {i+1} [mbar]" for i in range(len(fluigent_data))]
 
     @staticmethod
+    def _valve_header(valve_names, valve_states):
+        """Return valve column labels from profile metadata or sampled state width."""
+        state_width = max((len(row) for row in valve_states or []), default=0)
+        if valve_names:
+            labels = [str(name) for name in valve_names]
+            if state_width > len(labels):
+                labels.extend(f"V{i+1}" for i in range(len(labels), state_width))
+            return labels
+        return [f"V{i+1}" for i in range(state_width)]
+
+    @staticmethod
+    def _valve_row_values(valve_states, row_index, valve_column_count):
+        """Return one valve-state row padded to the exported valve column count."""
+        values = list(valve_states[row_index]) if row_index < len(valve_states) else []
+        if len(values) < valve_column_count:
+            values.extend(0 for _ in range(valve_column_count - len(values)))
+        return [str(value) for value in values[:valve_column_count]]
+
+    @staticmethod
     def _series_attr(series, key, default=None):
         """Read one generic-series field from dict-like or object-like metadata."""
         if isinstance(series, dict):
@@ -124,10 +143,8 @@ class CSVExporter:
                 writer.writerow(["Start timestamp (absolute)", dt.strftime("%Y-%m-%d %H:%M:%S")])
 
             header = ["Absolute Time [ISO]", "Time [s]", "Target [mbar]", "Corrected [mbar]", "Measured [mbar]"]
-            if valve_names and len(valve_names) >= 1:
-                header += [str(name) for name in valve_names]
-            else:
-                header += [f"V{i+1}" for i in range(8)]
+            valve_header = CSVExporter._valve_header(valve_names, valve_states)
+            header += valve_header
 
             header += [f"Flow {i+1} [uL/min]" for i in range(len(flow_data))]
             header += CSVExporter._fluigent_header(fluigent_sensors, fluigent_data)
@@ -148,7 +165,7 @@ class CSVExporter:
                     CSVExporter._decimal_text(measured[i] if i < len(measured) else 0.0),
                 ]
 
-                row += [str(v) for v in valve_states[i]] if i < len(valve_states) else ["0"] * 8
+                row += CSVExporter._valve_row_values(valve_states, i, len(valve_header))
                 row += [
                     CSVExporter._decimal_text(flow_data[j][i] if i < len(flow_data[j]) else 0.0)
                     for j in range(len(flow_data))
