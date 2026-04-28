@@ -28,7 +28,7 @@ def main() -> int:
     """Create the Qt6 application, show the v3 main window, and start the event loop."""
     app = QApplication(sys.argv)
     app.setApplicationName("Microfluidic System Controller v3")
-    setTheme(Theme.DARK)
+    setTheme(Theme.LIGHT)
     window = V3MainWindow()
     window.show()
     return app.exec()

@@ -50,7 +50,7 @@ class PlotPanel(QWidget):
             layout.addWidget(placeholder, 1)
             return
 
-        self._figure = Figure(figsize=(8, 5), facecolor="#111316")
+        self._figure = Figure(figsize=(8, 5), facecolor="#f8fbfc")
         self._axis = self._figure.add_subplot(111)
         self._flow_axis = self._axis.twinx()
         self._figure.subplots_adjust(left=0.10, right=0.78, top=0.92, bottom=0.12)
@@ -60,22 +60,22 @@ class PlotPanel(QWidget):
         self._configure_axes()
 
     def _configure_axes(self) -> None:
-        """Apply the v3 dark plot style."""
+        """Apply the v3 light plot style."""
         if self._axis is None:
             return
         for axis in (self._axis, self._flow_axis):
-            axis.set_facecolor("#15181d")
-            axis.tick_params(colors="#d7dce2")
+            axis.set_facecolor("#ffffff")
+            axis.tick_params(colors="#495966")
             for spine in axis.spines.values():
-                spine.set_color("#596273")
-        self._axis.set_xlabel("Time [s]", color="#d7dce2")
-        self._axis.set_ylabel("Pressure [mbar]", color="#d7dce2")
-        self._flow_axis.set_ylabel("Sensor values", color="#d7dce2")
+                spine.set_color("#cbd7df")
+        self._axis.set_xlabel("Time [s]", color="#495966")
+        self._axis.set_ylabel("Pressure [mbar]", color="#495966")
+        self._flow_axis.set_ylabel("Sensor values", color="#495966")
         self._flow_axis.spines["right"].set_position(("axes", 1.08))
-        self._axis.grid(True, color="#2a3039", linewidth=0.7)
-        (self._target_line,) = self._axis.plot([], [], color="#ffb454", label="Target")
-        (self._corrected_line,) = self._axis.plot([], [], color="#50fa7b", label="Corrected")
-        (self._measured_line,) = self._axis.plot([], [], color="#8be9fd", label="Measured")
+        self._axis.grid(True, color="#e1e9ee", linewidth=0.8)
+        (self._target_line,) = self._axis.plot([], [], color="#d98c00", linewidth=1.8, label="Target")
+        (self._corrected_line,) = self._axis.plot([], [], color="#1f9d63", linewidth=1.9, label="Corrected")
+        (self._measured_line,) = self._axis.plot([], [], color="#0b78a5", linewidth=1.7, label="Measured")
         self._draw()
 
     def reset(self) -> None:
@@ -183,5 +183,7 @@ class PlotPanel(QWidget):
             handles.extend(extra_handles)
             labels.extend(extra_labels)
         if handles:
-            self._axis.legend(handles, labels, loc="upper left", facecolor="#1b1e23", labelcolor="#f3f5f7")
+            legend = self._axis.legend(handles, labels, loc="upper left", facecolor="#ffffff", edgecolor="#d7e0e7")
+            for text in legend.get_texts():
+                text.set_color("#26333d")
         self._canvas.draw_idle()

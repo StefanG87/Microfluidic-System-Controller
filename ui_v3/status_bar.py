@@ -27,15 +27,6 @@ class V3StatusBar(QFrame):
         for label in (self.connection, self.measurement, self.program, self.profile, self.interval):
             layout.addWidget(label)
 
-        self.setStyleSheet(
-            """
-            QFrame#V3StatusBar {
-                background: #171a1f;
-                border-top: 1px solid #2d333d;
-            }
-            """
-        )
-
     def update_status(self, status: dict) -> None:
         """Apply one status snapshot emitted by the runtime controller."""
         self.connection.setText("Connected" if status.get("connected") else "Disconnected")

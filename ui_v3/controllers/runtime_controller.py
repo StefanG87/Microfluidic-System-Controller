@@ -316,6 +316,16 @@ class V3RuntimeController(QObject):
         self.target_pressure = 0.0
         self._emit_status()
 
+    def zero_offset_from_internal_pressure(self, persist=True):
+        """Set the pressure offset from the internal pressure monitor."""
+        measured = self.read_internal_pressure_mbar()
+        if measured is None:
+            self.append_log("[v3] Cannot zero offset: internal pressure monitor is not readable.")
+            return None
+        self.set_offset_mbar(measured, persist=persist, ignore_persist_errors=True)
+        self.append_log(f"[v3] Pressure offset set from internal monitor: {measured:.3f} mbar")
+        return measured
+
     def set_offset_mbar(self, offset_mbar, persist=False, ignore_persist_errors=False):
         """Update the pressure offset, optionally persisting it."""
         self.offset = float(offset_mbar)

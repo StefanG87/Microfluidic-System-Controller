@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QFrame, QScrollArea, QStackedWidget, QVBoxLayout, QWidget
 
-from ui_v3.cards import ExportCard, PressureCard, ProgramCard, SamplingCard, SettingsCard, ValveCard
+from ui_v3.cards import ExportCard, PressureCard, ProgramCard, SamplingCard, SensorCard, SettingsCard, ValveCard
 from ui_v3.fluent_compat import SubtitleLabel
 
 
@@ -30,11 +30,16 @@ class ControlPanel(QStackedWidget):
             "Dashboard",
             [
                 PressureCard(self.controller),
+                SensorCard(self.controller),
                 SamplingCard(self.controller),
                 ExportCard(self.controller),
             ],
         )
-        self._add_page("pressure", "Pressure Control", [PressureCard(self.controller), SamplingCard(self.controller)])
+        self._add_page(
+            "pressure",
+            "Pressure Control",
+            [PressureCard(self.controller), SensorCard(self.controller), SamplingCard(self.controller)],
+        )
         self._add_page("valves", "Valves", [ValveCard(self.controller)])
         self._add_page("program", "Program Runner", [ProgramCard(self.controller)])
         self._add_page("settings", "Settings", [SettingsCard(self.controller), ValveCard(self.controller)])

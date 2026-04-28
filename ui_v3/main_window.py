@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QHBoxLayout, QMainWindow, QVBoxLayout, QWidget
 
 from ui_v3.control_panel import ControlPanel
 from ui_v3.controllers.runtime_controller import V3RuntimeController
-from ui_v3.fluent_compat import apply_dark_palette
+from ui_v3.fluent_compat import apply_v3_palette
 from ui_v3.navigation import NavigationSidebar
 from ui_v3.plot_panel import PlotPanel
 from ui_v3.status_bar import V3StatusBar
@@ -29,11 +29,12 @@ class V3MainWindow(QMainWindow):
 
         self._build_layout()
         self._connect_signals()
-        apply_dark_palette(self)
+        apply_v3_palette(self)
 
     def _build_layout(self) -> None:
         """Build the engineering-style three-zone layout."""
         root = QWidget()
+        root.setObjectName("V3Root")
         root_layout = QVBoxLayout(root)
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)

@@ -29,6 +29,8 @@ class SettingsCard(CardWidget):
 
         self.ip = LineEdit()
         self.ip.setPlaceholderText("Modbus IP address, optional")
+        self.profile = LineEdit()
+        self.profile.setPlaceholderText("Hardware profile, optional (for example: stand1)")
         self.connect_button = PrimaryPushButton("Connect Hardware")
         self.disconnect_button = PushButton("Disconnect")
         self.refresh_button = PushButton("Refresh Config")
@@ -40,13 +42,17 @@ class SettingsCard(CardWidget):
         self.theme_button.clicked.connect(lambda _checked=False: self._toggle_theme())
 
         layout.addWidget(self.ip)
+        layout.addWidget(self.profile)
         layout.addWidget(stretch_row(self.connect_button, self.disconnect_button))
         layout.addWidget(stretch_row(self.refresh_button, self.theme_button))
         controller.status_changed.connect(self._apply_status)
 
     def _connect(self) -> None:
         """Connect using the optional IP entered by the user."""
-        self.controller.connect_hardware(self.ip.text().strip() or None)
+        self.controller.connect_hardware(
+            self.ip.text().strip() or None,
+            self.profile.text().strip() or None,
+        )
 
     def _toggle_theme(self) -> None:
         """Switch Fluent theme; fallback CSS remains dark during early v3 work."""

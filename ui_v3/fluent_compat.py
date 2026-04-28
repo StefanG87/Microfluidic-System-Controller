@@ -7,7 +7,6 @@ development and automated syntax checks.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFrame,
@@ -90,7 +89,7 @@ def _fallback_set_theme(_theme):
 
 
 def _fallback_is_dark_theme():
-    return True
+    return False
 
 
 Theme = getattr(_fluent, "Theme", _FallbackTheme)
@@ -123,40 +122,100 @@ def make_card_layout(card: QWidget) -> QVBoxLayout:
     return layout
 
 
-def apply_dark_palette(widget: QWidget) -> None:
-    """Apply a restrained dark stylesheet for fallback and app-specific surfaces."""
+def apply_v3_palette(widget: QWidget) -> None:
+    """Apply the light v3 workbench style used by the modern GUI."""
     widget.setStyleSheet(
         """
         QWidget {
-            color: #f3f5f7;
-            background: #111316;
+            color: #18202b;
+            background: #eef3f6;
+            font-family: "Segoe UI Variable", "Aptos", "Segoe UI";
             font-size: 10pt;
         }
+        QWidget#V3Root {
+            background: qlineargradient(
+                x1: 0, y1: 0, x2: 1, y2: 1,
+                stop: 0 #f9fbfc,
+                stop: 0.52 #edf4f7,
+                stop: 1 #e4edf2
+            );
+        }
+        QWidget#V3NavigationSidebar {
+            background: #f7fafb;
+            border-right: 1px solid #d7e0e7;
+        }
+        QScrollArea {
+            background: transparent;
+            border: none;
+        }
+        QScrollArea > QWidget > QWidget {
+            background: transparent;
+        }
         QFrame {
-            border-radius: 8px;
+            border-radius: 14px;
+        }
+        QFrame#V3StatusBar {
+            background: #f8fbfc;
+            border-top: 1px solid #d7e0e7;
+        }
+        QFrame#FallbackCardWidget,
+        CardWidget,
+        SimpleCardWidget {
+            background: #ffffff;
+            border: 1px solid #d8e2e8;
+            border-radius: 16px;
+        }
+        QWidget#V3PlotPanel {
+            background: #f8fbfc;
+            border-left: 1px solid #d7e0e7;
         }
         QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QTextEdit, QListWidget {
-            background: #1b1e23;
-            color: #f3f5f7;
-            border: 1px solid #343842;
-            border-radius: 6px;
-            padding: 4px;
+            background: #ffffff;
+            color: #18202b;
+            border: 1px solid #cbd7df;
+            border-radius: 8px;
+            padding: 6px;
+            selection-background-color: #2d7d9a;
+            selection-color: #ffffff;
         }
         QPushButton {
-            background: #262b33;
-            border: 1px solid #3a414d;
-            border-radius: 6px;
-            padding: 6px 10px;
+            background: #ffffff;
+            color: #18202b;
+            border: 1px solid #bfd0da;
+            border-radius: 9px;
+            padding: 7px 12px;
         }
         QPushButton:hover {
-            background: #303744;
+            background: #edf7fb;
+            border-color: #7eb4ca;
         }
         QPushButton:checked {
-            background: #0f6cbd;
-            border-color: #3b9cff;
+            background: #d7f0e5;
+            border-color: #43a775;
+            color: #0e5131;
+        }
+        QPushButton:disabled,
+        QLineEdit:disabled,
+        QSpinBox:disabled,
+        QDoubleSpinBox:disabled {
+            color: #80909a;
+            background: #eef2f4;
+            border-color: #d7e0e7;
+        }
+        QLabel#V3MetricValue {
+            font-size: 18pt;
+            font-weight: 650;
+            color: #0b5c78;
+        }
+        QLabel#V3MetricCaption {
+            color: #60717d;
+            font-size: 9pt;
         }
         """
     )
+
+
+apply_dark_palette = apply_v3_palette
 
 
 def stretch_row(*widgets: QWidget) -> QWidget:
