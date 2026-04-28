@@ -81,6 +81,11 @@ The installer creates local environments under
 packages and DLLs off the network repository path. Set `MF_CONTROLLER_ENV_ROOT`
 before running the installer if another local location is preferred.
 
+On a lab computer, the repository can stay on the network drive. Only the
+Python environments are created locally per Windows user in `%LOCALAPPDATA%`.
+`start_v3.bat` now creates the local v3 environment automatically if it is
+missing, runs a quick import check, and keeps the console open if startup fails.
+
 To install both the classic PyQt5 environment and the v3 PySide6 environment,
 use:
 
