@@ -22,6 +22,7 @@ from modules.export_dialog import ExportDialog
 from modules.sampling_manager import SamplingDialog, sampling_manager
 from modules.flow_sensor import SensirionFlowSensor
 from modules.measurement_session import MeasurementSession
+from modules.measurement_sampler import MeasurementSampler
 from modules.device_catalog import (
     SENSOR_NAME_INTERNAL,
     UNIT_FLOW_UL_MIN,
@@ -81,6 +82,11 @@ class PressureFlowGUI(QWidget):
         self._bind_measurement_buffers()
         self.runtime_devices = RuntimeDeviceRegistry()
         self.device_catalog = self.runtime_devices.catalog
+        self.measurement_sampler = MeasurementSampler(
+            self.runtime_devices,
+            self.measurement_session,
+            sampling_manager,
+        )
     
         # --- Connect to Modbus ---
         try:
@@ -115,6 +121,7 @@ class PressureFlowGUI(QWidget):
             )
             for i in range(4)
         ]
+        self.measurement_session.set_flow_channel_count(len(self.flow_sensors))
         self.runtime_devices.set_flow_sensors(self.flow_sensors)
         self.runtime_devices.register_flow_sensors()
         
@@ -1128,79 +1135,44 @@ class PressureFlowGUI(QWidget):
 
     def update_data(self):
         """
-        Update measurement buffers, plots, and sensor labels using the shared sampling time base.
+        Update plots and sensor labels after one shared acquisition tick.
         - `self.time_data` stores relative time in seconds for plotting.
         - `self.abs_time_data` stores absolute epoch timestamps for CSV export.
         """
-        # --- Fetch timestamps (absolute epoch + relative seconds since measurement start) ---
-        abs_time, rel_time = sampling_manager.get_timestamps()
-        if abs_time is None or rel_time is None:
-            # Fallback: reset the time base and try once more.
-            sampling_manager.reset_time()
-            abs_time, rel_time = sampling_manager.get_timestamps()
-    
-        # Store the time base and target pressure in the measurement session.
-        self.measurement_session.begin_sample(abs_time, rel_time, self.target_pressure)
-
-        # --- Read the internal pressure source ---
-        raw = self.pressure_source.getRawMonitorValue()
-        if raw is None:
-            self._truncate_data()
+        sample = self.measurement_sampler.sample(
+            target_pressure=self.target_pressure,
+            offset=self.offset,
+            rotary_active=self._snapshot_rotary_active(),
+        )
+        if sample is None:
             return
-    
-        measured = self.pressure_source.bitToMbar(raw)
-        corrected = measured - self.offset
-    
-        self.measurement_session.append_pressure_sample(corrected, measured)
+
         if SENSOR_NAME_INTERNAL in self.sensor_labels:
             self.sensor_labels[SENSOR_NAME_INTERNAL].setText(
-                f"{SENSOR_NAME_INTERNAL}: {measured:.1f} {UNIT_PRESSURE_MBAR}"
+                f"{SENSOR_NAME_INTERNAL}: {sample.measured_pressure:.1f} {UNIT_PRESSURE_MBAR}"
             )
-    
-        # --- Capture valve states ---
-        self.measurement_session.append_valve_states(self.runtime_devices.read_valve_states())
+
+        # Keep valve buttons synchronized with the states captured by the sampler.
         self._sync_valve_buttons()
-    
-        # --- Read flow sensors ---
-        for i, sensor in enumerate(self.flow_sensors):
-            val = sensor.read_flow()
-            value = val if val is not None else 0.0
-            self.measurement_session.append_flow_value(i, value)
-    
-            label_key = sensor.name
+
+        for label_key, value in sample.flow_values:
             if label_key in self.sensor_labels:
                 self.sensor_labels[label_key].setText(f"{label_key}: {value:.1f} {UNIT_FLOW_UL_MIN}")
-        # --- Read Fluigent sensors ---
-        for i, sensor in enumerate(self.fluigent_sensors):
-            val = sensor.read_pressure()
-            value = val if val is not None else 0.0
-            self.measurement_session.append_fluigent_pressure_value(i, value)
-    
-            sn_key = f"SN{sensor.device_sn}"
-            if sn_key in self.sensor_labels:
-                self.sensor_labels[sn_key].setText(f"{sn_key}: {value:.1f} {UNIT_PRESSURE_MBAR}")
-    
-        # --- Refresh the live display label ---
+
+        for label_key, value in sample.fluigent_values:
+            if label_key in self.sensor_labels:
+                self.sensor_labels[label_key].setText(f"{label_key}: {value:.1f} {UNIT_PRESSURE_MBAR}")
+
         self.label_display.setText(
-            f"Measured: {measured:.1f} | Corrected: {corrected:.1f} mbar | Offset: {self.offset:.1f} mbar"
+            f"Measured: {sample.measured_pressure:.1f} | "
+            f"Corrected: {sample.corrected_pressure:.1f} mbar | Offset: {self.offset:.1f} mbar"
         )
-    
-        # Record the rotary state for the plot background bands.
-        self.measurement_session.append_rotary_active(self._snapshot_rotary_active())
-    
-        # --- Refresh the plot ---
+
         try:
             if hasattr(self, "plot_area"):
                 self.plot_area.update_plot()
         except Exception as e:
             print(f"[Plot] Skipped update due to error: {e}")
-
-
-
-            
-    def _truncate_data(self):
-        """Roll back the partially appended sample if the pressure readout fails."""
-        self.measurement_session.rollback_partial_sample()
 
     def do_csv_export(self, path=None, silent=False):
         """

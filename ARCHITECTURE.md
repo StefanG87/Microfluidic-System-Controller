@@ -10,10 +10,11 @@ The main runtime window is `PressureFlowGUI` in `modules/gui_window.py`. The pro
 
 1. `main_gui.py` bootstraps import paths for the project and bundled Fluigent SDK, creates the Qt application, and opens `PressureFlowGUI`.
 2. `PressureFlowGUI` connects to the Modbus pressure/valve hardware, loads the selected hardware profile, builds valve objects, detects configured sensors, and creates the plot/export/program-runner components.
-3. A Qt timer calls `update_data()`, which reads the current pressure, valves, flow sensors, Fluigent pressure sensors, and rotary-valve state into the shared measurement session.
-4. `PlotArea` renders live pressure, flow, valve, Fluigent, and rotary activity data from the buffers.
-5. `ExportDialog` and `CSVExporter` write snapshots of the current measurement session to CSV files.
-6. Automation programs are loaded from JSON by `ProgramRunner` and executed in a worker thread through `ProgramWorker`.
+3. A Qt timer calls `update_data()`, which delegates one acquisition tick to `MeasurementSampler`.
+4. `MeasurementSampler` reads the current pressure, valves, flow sensors, Fluigent pressure sensors, and rotary-valve state into the shared measurement session.
+5. `PressureFlowGUI` updates live labels and asks `PlotArea` to render pressure, flow, valve, Fluigent, and rotary activity data from the buffers.
+6. `ExportDialog` and `CSVExporter` write snapshots of the current measurement session to CSV files.
+7. Automation programs are loaded from JSON by `ProgramRunner` and executed in a worker thread through `ProgramWorker`.
 
 ## Main Modules
 
@@ -21,6 +22,7 @@ The main runtime window is `PressureFlowGUI` in `modules/gui_window.py`. The pro
 
 - `modules/gui_window.py`: main controller window, hardware lifecycle, runtime state, GUI callbacks, and automation bridge methods.
 - `modules/measurement_session.py`: owner for live measurement buffers, generic extra measurement series, and export snapshots.
+- `modules/measurement_sampler.py`: per-tick data-acquisition logic that reads runtime devices into `MeasurementSession`.
 - `modules/device_catalog.py`: lightweight catalog for editor-visible sensors and actuators.
 - `modules/runtime_devices.py`: runtime device registry that owns active hardware references, rebuilds the device catalog, and coordinates manual device refreshes.
 - `modules/device_refresh.py`: conservative hardware-refresh probes and user-facing refresh summaries.
@@ -85,6 +87,7 @@ The application is intentionally still a pragmatic lab GUI, not a fully layered 
 Important boundaries now in place:
 
 - Measurement buffers are grouped in `MeasurementSession` instead of being owned only as loose GUI lists.
+- Measurement acquisition is handled by `MeasurementSampler`; `PressureFlowGUI.update_data()` now keeps the UI-facing label and plot refresh responsibilities.
 - Generic future measurement channels can be registered in `MeasurementSession` as named extra series so they become CSV columns without changing the established pressure/flow/valve export format.
 - Runtime device references are grouped in `RuntimeDeviceRegistry`, which rebuilds `DeviceCatalog` descriptors before the GUI publishes names to editor dialogs. Existing hardware modules expose catalog descriptors through this central layer instead of duplicating device metadata in the GUI.
 - Program-facing sensor reads go through `RuntimeDeviceRegistry`, while `PressureFlowGUI` keeps compatibility wrapper methods for existing runner calls.
@@ -103,7 +106,7 @@ Strong couplings that still exist:
 
 - `PressureFlowGUI` still owns UI widgets, hardware object construction, plotting coordination, export orchestration, and program bootstrapping.
 - Editor device availability is still published through mutable module-level state in `task_globals.py`.
-- Periodic measurement sampling still reads pressure, flow, and Fluigent values directly in the GUI update loop.
+- Periodic measurement sampling is extracted, but the GUI still owns label formatting and plot refresh orchestration.
 - Import/resource setup still partly depends on startup-time path bootstrapping for local execution and bundled SDK compatibility.
 - Some hardware error paths are intentionally broad to keep the lab GUI alive, but they can hide root causes if logs are not inspected.
 

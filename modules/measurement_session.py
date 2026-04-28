@@ -72,6 +72,15 @@ class MeasurementSession:
         elif count < current:
             del self.fluigent_pressure_data[count:]
 
+    def set_flow_channel_count(self, count):
+        """Resize flow buffers after profile/device changes, keeping existing values when possible."""
+        count = max(0, int(count))
+        current = len(self.flow_data)
+        if count > current:
+            self.flow_data.extend(deque() for _ in range(count - current))
+        elif count < current:
+            del self.flow_data[count:]
+
     def reset(self):
         """Clear all buffers for a new measurement run."""
         self.time_data.clear()
