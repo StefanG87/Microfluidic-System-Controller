@@ -16,15 +16,21 @@ The controller GUI connects to laboratory hardware over Modbus TCP and serial in
 
 The main runtime window is `PressureFlowGUI` in `modules/gui_window.py`.
 
+A parallel v3 GUI track is available through `main_gui_v3.py`. It uses PySide6
+and Fluent Widgets in a separate Qt6 path so the stable PyQt5 lab GUI remains
+available while the modern interface reaches functional parity.
+
 ## Main Entry Points
 
 - `main_gui.py`: starts the main controller GUI.
+- `main_gui_v3.py`: starts the parallel PySide6/Fluent v3 GUI shell.
 - `editor_main_embedded.py`: integrated editor window launched from the controller.
 - `editor/editor_main.py`: standalone program editor.
 
 ## Project Structure
 
 - `modules/`: runtime package for GUI, hardware interfaces, plotting, export, pressure profiles, and program execution.
+- `ui_v3/`: parallel PySide6/Fluent interface with navigation, control cards, Qt6 plot panel, controller facades, and a JSON-compatible editor shell.
 - `editor/`: standalone and embedded program editor package.
 - `lookup/`: hardware profiles and local preference data.
 - `icons/` and `editor/icons/`: GUI icon assets.
@@ -52,6 +58,13 @@ Start the main GUI:
 
 ```bash
 py -3 main_gui.py
+```
+
+Install the experimental v3 dependencies from `requirements-v3.txt`, then start
+the parallel Qt6 GUI:
+
+```bash
+py -3 main_gui_v3.py
 ```
 
 Start the standalone editor:

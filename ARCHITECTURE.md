@@ -2,9 +2,9 @@
 
 ## Program Summary
 
-The Microfluidic System Controller is a PyQt5 desktop application for controlling and monitoring a laboratory microfluidic measurement setup. It combines pressure control, valve switching, flow and pressure sensor readout, live plotting, CSV export, and JSON-defined automation programs.
+The Microfluidic System Controller is a desktop application for controlling and monitoring a laboratory microfluidic measurement setup. The stable production GUI is still PyQt5. A parallel PySide6/Fluent v3 GUI is being developed beside it without mixing Qt bindings in the same process. The application combines pressure control, valve switching, flow and pressure sensor readout, live plotting, CSV export, and JSON-defined automation programs.
 
-The main runtime window is `PressureFlowGUI` in `modules/gui_window.py`. The program editor can run embedded from the main GUI or standalone through `editor/editor_main.py`.
+The main production runtime window is `PressureFlowGUI` in `modules/gui_window.py`. The program editor can run embedded from the main GUI or standalone through `editor/editor_main.py`. The v3 runtime starts through `main_gui_v3.py` and uses widgets under `ui_v3/`.
 
 ## Runtime Flow
 
@@ -15,6 +15,29 @@ The main runtime window is `PressureFlowGUI` in `modules/gui_window.py`. The pro
 5. `PressureFlowGUI` updates live labels and asks `PlotArea` to render pressure, flow, valve, Fluigent, and rotary activity data from the buffers.
 6. `ExportDialog` and `CSVExporter` write snapshots of the current measurement session to CSV files.
 7. Automation programs are loaded from JSON by `ProgramRunner` and executed in a worker thread through `ProgramWorker`.
+
+## V3 UI Track
+
+The v3 GUI is a parallel modernization track, not a replacement for the lab GUI yet. It keeps `main_gui.py` unchanged and starts through `main_gui_v3.py`.
+
+Current v3 structure:
+
+- `ui_v3/main_window.py`: PySide6 main window with navigation, control-panel stack, plot panel, and status strip.
+- `ui_v3/navigation.py`: Fluent navigation route definitions for Dashboard, Pressure Control, Valves, Program Runner, and Settings.
+- `ui_v3/control_panel.py`: page stack that composes reusable cards.
+- `ui_v3/cards/`: thin UI cards for pressure, valves, sampling, export, program execution, and settings.
+- `ui_v3/plot_panel.py`: Qt6 Matplotlib canvas using `backend_qtagg`.
+- `ui_v3/status_bar.py`: connection, measurement, program, profile, and interval status.
+- `ui_v3/controllers/runtime_controller.py`: Qt6-facing controller facade around existing runtime modules.
+- `ui_v3/controllers/program_worker.py`: PySide6 worker wrapper for `ProgramRunner`.
+- `ui_v3/editor/`: early PySide6 editor shell that preserves the JSON contract from `program_contract.py`.
+
+Important v3 constraints:
+
+- PyQt5 widgets are not imported into the v3 app.
+- Hardware logic remains in existing hardware/runtime modules; v3 widgets call controller methods.
+- The v3 editor is JSON-compatible but not yet feature-complete with the specialized PyQt5 editor dialogs.
+- Rotary valve v3 program actions are placeholders until the Qt6 rotary UI/controller integration is ported.
 
 ## Main Modules
 
@@ -90,6 +113,7 @@ Important boundaries now in place:
 - Measurement acquisition is handled by `MeasurementSampler`; `PressureFlowGUI.update_data()` now keeps the UI-facing label and plot refresh responsibilities.
 - Generic future measurement channels can be registered in `MeasurementSession` as named extra series so they become CSV columns without changing the established pressure/flow/valve export format.
 - Runtime device references are grouped in `RuntimeDeviceRegistry`, which rebuilds `DeviceCatalog` descriptors before the GUI publishes names to editor dialogs. Existing hardware modules expose catalog descriptors through this central layer instead of duplicating device metadata in the GUI.
+- The v3 GUI uses `V3RuntimeController` as a controller facade around `RuntimeDeviceRegistry`, `MeasurementSampler`, `MeasurementSession`, `ProgramRunner`, and `CSVExporter`.
 - Optional runtime adapters can publish generic sampled channels through `RuntimeDeviceRegistry.add_measurement_channel()`. `MeasurementSampler` records these channels into `MeasurementSession.extra_series` so CSV export includes them automatically.
 - Program-facing sensor reads go through `RuntimeDeviceRegistry`, while `PressureFlowGUI` keeps compatibility wrapper methods for existing runner calls.
 - Program-facing valve commands go through `RuntimeDeviceRegistry`, while GUI wrapper methods keep the existing `ProgramRunner` interface stable.
