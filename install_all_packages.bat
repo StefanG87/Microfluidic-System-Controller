@@ -34,12 +34,14 @@ echo Repository: %CD%
 echo Environment root: %MF_CONTROLLER_ENV_ROOT%
 echo.
 
-where py >nul 2>nul
+call :find_python
 if errorlevel 1 (
-    echo Python launcher not found: py
-    echo Install Python 3 or start the installer from a Python environment that provides py.exe.
+    echo No compatible Python 3.10+ interpreter was found.
+    echo Install Python 3.11, or set MF_PYTHON_EXE to an existing python.exe before starting this launcher.
     goto fail
 )
+echo Bootstrap Python: %MF_BASE_PYTHON%
+echo.
 
 if /I not "%MODE%"=="v3" (
     call :install_env "%MF_CLASSIC_ENV%" "requirements.txt" "classic PyQt5 runtime"
@@ -72,7 +74,7 @@ if "%RESET%"=="1" if exist "%ENV_DIR%" (
 )
 
 if not exist "%ENV_DIR%\Scripts\python.exe" (
-    py -3 -m venv "%ENV_DIR%"
+    "%MF_BASE_PYTHON%" -m venv "%ENV_DIR%"
     if errorlevel 1 exit /b %errorlevel%
 )
 
@@ -85,6 +87,53 @@ if errorlevel 1 exit /b %errorlevel%
 
 echo.
 exit /b 0
+
+:find_python
+set "MF_BASE_PYTHON="
+
+if not "%MF_PYTHON_EXE%"=="" (
+    set "MF_BASE_PYTHON=%MF_PYTHON_EXE%"
+    call :validate_python
+    if not errorlevel 1 exit /b 0
+)
+
+where py >nul 2>nul
+if not errorlevel 1 (
+    for /f "delims=" %%P in ('py -3 -c "import sys, venv; print(sys.executable)" 2^>nul') do set "MF_BASE_PYTHON=%%P"
+    call :validate_python
+    if not errorlevel 1 exit /b 0
+)
+
+for /f "delims=" %%P in ('where python 2^>nul') do (
+    set "MF_BASE_PYTHON=%%P"
+    call :validate_python
+    if not errorlevel 1 exit /b 0
+)
+
+for %%P in (
+    "%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+    "%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+    "%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
+    "%LOCALAPPDATA%\anaconda3\python.exe"
+    "%USERPROFILE%\AppData\Local\anaconda3\python.exe"
+    "%LOCALAPPDATA%\spyder-6\python.exe"
+    "%USERPROFILE%\AppData\Local\spyder-6\python.exe"
+    "C:\ProgramData\anaconda3\python.exe"
+) do (
+    if exist "%%~P" (
+        set "MF_BASE_PYTHON=%%~P"
+        call :validate_python
+        if not errorlevel 1 exit /b 0
+    )
+)
+
+set "MF_BASE_PYTHON="
+exit /b 1
+
+:validate_python
+if "%MF_BASE_PYTHON%"=="" exit /b 1
+"%MF_BASE_PYTHON%" -c "import sys, venv; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>nul
+exit /b %errorlevel%
 
 :check_v3_imports
 echo === Checking v3 Qt imports ===
@@ -105,5 +154,6 @@ echo If v3 Qt DLL imports fail after a partial install, rerun:
 echo install_all_packages.bat --v3-only --reset
 echo.
 echo You can override the local environment folder with MF_CONTROLLER_ENV_ROOT.
+echo You can override the bootstrap Python with MF_PYTHON_EXE.
 popd
 exit /b 1

@@ -92,6 +92,11 @@ For normal lab use, double-click `Launch_MF_Controller_v3.bat`. It wraps the v3
 starter in a visible console window and avoids Spyder or any active Python
 environment.
 
+If the lab computer does not provide the Windows `py` launcher, the installer
+also looks for `python.exe` in common Python, Anaconda, and Spyder locations.
+Set `MF_PYTHON_EXE` to a specific `python.exe` before launching if the automatic
+search does not find the right interpreter.
+
 To install both the classic PyQt5 environment and the v3 PySide6 environment,
 use:
 
