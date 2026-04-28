@@ -31,13 +31,8 @@ if not exist "%V3_ENV%\Scripts\python.exe" (
     if errorlevel 1 goto fail
 )
 
-call "%~dp0check_v3.bat" > "%CHECK_LOG%" 2>&1
-if errorlevel 1 (
-    echo v3 environment check failed. See:
-    echo   %CHECK_LOG%
-    type "%CHECK_LOG%"
-    goto fail
-)
+call :check_or_repair_env
+if errorlevel 1 goto fail
 
 set "PYTHONNOUSERSITE=1"
 set "QT_API=pyside6"
@@ -56,6 +51,30 @@ echo Start log:
 echo   %START_LOG%
 if "%KEEP_OPEN%"=="1" pause
 popd
+exit /b 0
+
+:check_or_repair_env
+call "%~dp0check_v3.bat" > "%CHECK_LOG%" 2>&1
+if not errorlevel 1 exit /b 0
+
+echo v3 environment check failed. Attempting package repair...
+echo First failed check:
+type "%CHECK_LOG%"
+echo. >> "%START_LOG%"
+echo v3 environment check failed. Attempting package repair... >> "%START_LOG%"
+type "%CHECK_LOG%" >> "%START_LOG%"
+
+call "%~dp0install_all_packages.bat" --v3-only >> "%START_LOG%" 2>&1
+if errorlevel 1 exit /b 1
+
+call "%~dp0check_v3.bat" > "%CHECK_LOG%" 2>&1
+if errorlevel 1 (
+    echo v3 environment check still failed after repair:
+    type "%CHECK_LOG%"
+    exit /b 1
+)
+
+echo v3 environment repaired successfully.
 exit /b 0
 
 :fail

@@ -92,6 +92,10 @@ For normal lab use, double-click `Launch_MF_Controller_v3.bat`. It wraps the v3
 starter in a visible console window and avoids Spyder or any active Python
 environment.
 
+If the local v3 environment exists but is incomplete, for example because
+`qfluentwidgets` is missing after an interrupted first install, the launcher now
+tries one automatic package repair before reporting the error.
+
 If the lab computer does not provide the Windows `py` launcher, the installer
 also looks for `python.exe` in common Python, Anaconda, and Spyder locations.
 Set `MF_PYTHON_EXE` to a specific `python.exe` before launching if the automatic
