@@ -4,6 +4,7 @@ __pycache__/
 *.pyo
 *.pyd
 .venv/
+.venv-v3/
 venv/
 
 # Build artifacts

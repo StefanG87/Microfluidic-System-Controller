@@ -67,6 +67,34 @@ the parallel Qt6 GUI:
 py -3 main_gui_v3.py
 ```
 
+For a clean local v3 environment that does not modify the classic PyQt5 setup,
+use:
+
+```bash
+setup_v3_env.bat
+check_v3.bat
+start_v3.bat
+```
+
+The installer creates local environments under
+`%LOCALAPPDATA%\MicrofluidicSystemController` by default. This keeps large Qt
+packages and DLLs off the network repository path. Set `MF_CONTROLLER_ENV_ROOT`
+before running the installer if another local location is preferred.
+
+To install both the classic PyQt5 environment and the v3 PySide6 environment,
+use:
+
+```bash
+install_all_packages.bat
+```
+
+If a previous v3 install produced Qt DLL import errors, rebuild only the v3
+environment:
+
+```bash
+install_all_packages.bat --v3-only --reset
+```
+
 Start the standalone editor:
 
 ```bash
