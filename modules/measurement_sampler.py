@@ -13,6 +13,7 @@ class MeasurementSample:
     rel_time: float
     measured_pressure: float
     corrected_pressure: float
+    valve_states: list[int]
     flow_values: list[tuple[str, float]]
     fluigent_values: list[tuple[str, float]]
     extra_values: list[tuple[str, object, str]]
@@ -49,7 +50,8 @@ class MeasurementSampler:
         corrected_pressure = measured_pressure - offset
         self.measurement_session.append_pressure_sample(corrected_pressure, measured_pressure)
 
-        self.measurement_session.append_valve_states(self.runtime_devices.read_valve_states())
+        valve_states = self.runtime_devices.read_valve_states()
+        self.measurement_session.append_valve_states(valve_states)
 
         flow_values = self._append_flow_values()
         fluigent_values = self._append_fluigent_values()
@@ -62,6 +64,7 @@ class MeasurementSampler:
             rel_time=rel_time,
             measured_pressure=measured_pressure,
             corrected_pressure=corrected_pressure,
+            valve_states=valve_states,
             flow_values=flow_values,
             fluigent_values=fluigent_values,
             extra_values=extra_values,

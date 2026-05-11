@@ -25,19 +25,20 @@ Current v3 structure:
 - `ui_v3/main_window.py`: PySide6 main window with navigation, control-panel stack, plot panel, and status strip.
 - `ui_v3/navigation.py`: Fluent navigation route definitions for Dashboard, Pressure Control, Valves, Program Runner, and Settings.
 - `ui_v3/control_panel.py`: page stack that composes reusable cards.
-- `ui_v3/cards/`: thin UI cards for pressure, valves, sampling, export, program execution, and settings.
+- `ui_v3/cards/`: thin UI cards for hardware connection, pressure, valves, rotary control, sampling, export, program execution, sensors, and settings.
 - `ui_v3/plot_panel.py`: Qt6 Matplotlib canvas using `backend_qtagg`.
 - `ui_v3/status_bar.py`: connection, measurement, program, profile, and interval status.
 - `ui_v3/controllers/runtime_controller.py`: Qt6-facing controller facade around existing runtime modules.
 - `ui_v3/controllers/program_worker.py`: PySide6 worker wrapper for `ProgramRunner`.
-- `ui_v3/editor/`: early PySide6 editor shell that preserves the JSON contract from `program_contract.py`.
+- `ui_v3/editor/`: PySide6 editor shell with task-specific parameter dialogs that preserves the JSON contract from `program_contract.py`.
 
 Important v3 constraints:
 
 - PyQt5 widgets are not imported into the v3 app.
 - Hardware logic remains in existing hardware/runtime modules; v3 widgets call controller methods.
-- The v3 editor is JSON-compatible but not yet feature-complete with the specialized PyQt5 editor dialogs.
-- Rotary valve v3 program actions are placeholders until the Qt6 rotary UI/controller integration is ported.
+- The v3 editor is JSON-compatible and includes native PySide6 parameter dialogs for the current program contract, including a Qt6 Matplotlib preview for PolynomialPressure.
+- The v3 rotary card uses the shared rotary controller layer and publishes connection/activity metadata through the runtime device catalog; it still needs full lab validation before v3 replaces the classic GUI.
+- The v3 settings page can select lookup hardware profiles or load an explicit profile JSON file. Profile changes are blocked during measurement or program execution.
 
 ## Main Modules
 
@@ -64,6 +65,16 @@ Important v3 constraints:
 - `modules/rotary_valve_widget.py`: rotary valve GUI, polling, and program-runner helper methods.
 - `modules/rvm_dt.py`: low-level AMF RVM DT serial protocol helper.
 - `modules/mf_common.py`: shared preferences, resource/output paths, hardware profile loading, small UI helpers, and persistence helpers.
+
+### Hardware Profiles
+
+Hardware profiles live in `lookup/` and define valve ownership, labels, editor names, and Modbus coil mapping. The active profile is stored in local `lookup/device_prefs.json`, which is intentionally ignored by Git because it is machine/setup-specific.
+
+Tracked profiles currently include:
+
+- `stand1.json`: classic 4 pneumatic + 4 fluidic setup.
+- `stand2.json`: alternate placeholder setup.
+- `extended_pneumatic_setup.json`: 12-outlet pneumatic setup measured on the lab controller. Its Modbus mapping is Outlet 1-4 -> coils 0-3, Outlet 5-8 -> coils 12-15, and Outlet 9-12 -> coils 8-11.
 
 ### Automation And Editor
 
@@ -115,6 +126,7 @@ Important boundaries now in place:
 - Runtime device references are grouped in `RuntimeDeviceRegistry`, which rebuilds `DeviceCatalog` descriptors before the GUI publishes names to editor dialogs. Existing hardware modules expose catalog descriptors through this central layer instead of duplicating device metadata in the GUI.
 - The v3 GUI uses `V3RuntimeController` as a controller facade around `RuntimeDeviceRegistry`, `MeasurementSampler`, `MeasurementSession`, `ProgramRunner`, and `CSVExporter`.
 - Optional runtime adapters can publish generic sampled channels through `RuntimeDeviceRegistry.add_measurement_channel()`. `MeasurementSampler` records these channels into `MeasurementSession.extra_series` so CSV export includes them automatically.
+- v3 profile changes go through `V3RuntimeController.set_hardware_profile()`. The method blocks changes while measuring or running a program, closes currently mapped valves before rebuilding connected valve objects, then republishes the device catalog.
 - Program-facing sensor reads go through `RuntimeDeviceRegistry`, while `PressureFlowGUI` keeps compatibility wrapper methods for existing runner calls.
 - Program-facing valve commands go through `RuntimeDeviceRegistry`, while GUI wrapper methods keep the existing `ProgramRunner` interface stable.
 - Manual config refreshes are coordinated by `RuntimeDeviceRegistry`: the GUI asks for a refresh, then updates measurement buffers, labels, plots, and editor globals from the refreshed catalog.

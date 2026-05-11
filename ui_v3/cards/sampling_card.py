@@ -2,41 +2,100 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QSpinBox
+from pathlib import Path
 
-from ui_v3.fluent_compat import BodyLabel, CardWidget, CaptionLabel, PrimaryPushButton, PushButton, make_card_layout, stretch_row
+from PySide6.QtWidgets import QFileDialog, QSpinBox
+
+from ui_v3.fluent_compat import BodyLabel, CardWidget, PrimaryPushButton, PushButton, make_card_layout, stretch_row
 
 
 class SamplingCard(CardWidget):
     """Configure sampling interval and measurement state."""
 
-    def __init__(self, controller, parent=None):
+    def __init__(self, controller, parent=None, show_interval: bool = True):
         super().__init__(parent)
         self.controller = controller
+        self.show_interval = bool(show_interval)
         layout = make_card_layout(self)
-        layout.addWidget(BodyLabel("Sampling"))
-        layout.addWidget(CaptionLabel("All intervals are stored and displayed in milliseconds."))
+        layout.addWidget(BodyLabel("Recording"))
 
-        self.interval = QSpinBox()
-        self.interval.setRange(1, 600000)
-        self.interval.setValue(controller.sampling_interval_ms)
-        self.interval.setSuffix(" ms")
-        self.interval.valueChanged.connect(controller.set_sampling_interval_ms)
+        self.interval = None
+        if self.show_interval:
+            self.interval = QSpinBox()
+            self.interval.setRange(1, 600000)
+            self.interval.setValue(controller.sampling_interval_ms)
+            self.interval.setSuffix(" ms")
+            self.interval.valueChanged.connect(controller.set_sampling_interval_ms)
 
-        self.start_button = PrimaryPushButton("Start Measurement")
-        self.stop_button = PushButton("Stop Measurement")
+        self.start_button = PrimaryPushButton("New Measurement")
+        self.stop_button = PushButton("Stop + Export")
+        self.export_button = PushButton("Export CSV")
         self.start_button.clicked.connect(lambda _checked=False: controller.start_measurement())
-        self.stop_button.clicked.connect(lambda _checked=False: controller.stop_measurement())
+        self.stop_button.clicked.connect(lambda _checked=False: self._stop_measurement())
+        self.export_button.clicked.connect(lambda _checked=False: self._export_csv())
 
-        layout.addWidget(self.interval)
-        layout.addWidget(stretch_row(self.start_button, self.stop_button))
+        if self.interval is not None:
+            layout.addWidget(self.interval)
+        layout.addWidget(stretch_row(self.start_button, self.stop_button, self.export_button))
         controller.status_changed.connect(self._apply_status)
+        controller.sample_ready.connect(lambda _sample: self._apply_status(controller.status_snapshot()))
+        self._apply_status(controller.status_snapshot())
 
     def _apply_status(self, status: dict) -> None:
         """Keep interval and button state aligned with runtime state."""
-        self.interval.blockSignals(True)
-        self.interval.setValue(int(status.get("sampling_interval_ms", self.interval.value()) or 1))
-        self.interval.blockSignals(False)
+        if self.interval is not None:
+            self.interval.blockSignals(True)
+            self.interval.setValue(int(status.get("sampling_interval_ms", self.interval.value()) or 1))
+            self.interval.blockSignals(False)
         measuring = bool(status.get("measuring"))
-        self.start_button.setEnabled(not measuring)
+        connected = bool(status.get("connected"))
+        self.start_button.setEnabled(connected and not measuring)
         self.stop_button.setEnabled(measuring)
+        self.export_button.setEnabled(self.controller.measurement_has_data())
+        if self.interval is not None:
+            self.interval.setEnabled(not measuring)
+
+    def _export_csv(self) -> None:
+        """Export any currently buffered live samples without requiring a started run."""
+        if not self.controller.measurement_has_data():
+            self.controller.append_log("[v3] CSV export skipped: no samples available yet.")
+            return
+        default_path = self.controller.suggest_csv_path()
+        path, _filter = QFileDialog.getSaveFileName(
+            self,
+            "Export Measurement CSV",
+            default_path,
+            "CSV files (*.csv);;All files (*)",
+        )
+        if not path:
+            return
+        if Path(path).suffix.lower() != ".csv":
+            path = f"{path}.csv"
+        try:
+            self.controller.export_csv(path)
+        except Exception as exc:
+            self.controller.append_log(f"[v3] CSV export failed: {exc}")
+
+    def _stop_measurement(self) -> None:
+        """Stop a manual measurement and offer the same explicit export workflow as classic v2."""
+        self.controller.stop_measurement()
+        if not self.controller.measurement_has_data():
+            self.controller.append_log("[v3] Measurement stopped without samples; CSV export skipped.")
+            return
+
+        default_path = self.controller.suggest_csv_path()
+        path, _filter = QFileDialog.getSaveFileName(
+            self,
+            "Export Measurement CSV",
+            default_path,
+            "CSV files (*.csv);;All files (*)",
+        )
+        if not path:
+            self.controller.append_log("[v3] Manual measurement stopped; CSV export skipped by user.")
+            return
+        if Path(path).suffix.lower() != ".csv":
+            path = f"{path}.csv"
+        try:
+            self.controller.export_csv(path)
+        except Exception as exc:
+            self.controller.append_log(f"[v3] CSV export after stop failed: {exc}")

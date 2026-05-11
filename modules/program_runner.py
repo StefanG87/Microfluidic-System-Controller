@@ -378,6 +378,8 @@ class ProgramRunner:
             p = p_start + (p_end - p_start) * i / steps
             self.gui.set_target_pressure_mbar(p)
             self._sleep_abortable(0.2)
+        if not self.running:
+            self._log("Pressure ramp stopped before completion.")
 
     
     def polynomial_pressure(self, params):
@@ -575,7 +577,10 @@ class ProgramRunner:
             if not continuous and stable_counter * sampling_interval >= stable_time:
                 break
     
-        self._log(f"Flow control finished. Final pressure: {current_pressure} mbar.")
+        if not self.running:
+            self._log(f"Flow control stopped. Final pressure: {current_pressure} mbar.")
+        else:
+            self._log(f"Flow control finished. Final pressure: {current_pressure} mbar.")
     
     def get_flow_value(self, sensor_name):
         """

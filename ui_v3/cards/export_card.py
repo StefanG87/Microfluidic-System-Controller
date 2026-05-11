@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QFileDialog
 
-from ui_v3.fluent_compat import BodyLabel, CardWidget, CaptionLabel, PrimaryPushButton, PushButton, make_card_layout, stretch_row
+from ui_v3.fluent_compat import BodyLabel, CardWidget, PrimaryPushButton, PushButton, make_card_layout, stretch_row
 
 
 class ExportCard(CardWidget):
@@ -15,7 +15,6 @@ class ExportCard(CardWidget):
         self.controller = controller
         layout = make_card_layout(self)
         layout.addWidget(BodyLabel("CSV Export"))
-        layout.addWidget(CaptionLabel("Uses the shared CSV exporter and dynamic channel metadata."))
 
         self.auto_button = PrimaryPushButton("Export Automatically")
         self.choose_button = PushButton("Choose Path")
@@ -25,6 +24,9 @@ class ExportCard(CardWidget):
 
     def _export_auto(self) -> None:
         """Export to the standard measurements folder."""
+        if not self.controller.measurement_has_data():
+            self.controller.append_log("[v3] CSV export skipped: no samples available yet.")
+            return
         try:
             self.controller.export_csv()
         except Exception as exc:
@@ -32,6 +34,9 @@ class ExportCard(CardWidget):
 
     def _export_with_dialog(self) -> None:
         """Let the user choose the CSV path."""
+        if not self.controller.measurement_has_data():
+            self.controller.append_log("[v3] CSV export skipped: no samples available yet.")
+            return
         path, _filter = QFileDialog.getSaveFileName(
             self,
             "Export CSV",

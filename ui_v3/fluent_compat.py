@@ -117,8 +117,8 @@ def fluent_icon(name: str) -> QIcon:
 def make_card_layout(card: QWidget) -> QVBoxLayout:
     """Create the standard 8px-grid layout used by v3 cards."""
     layout = QVBoxLayout(card)
-    layout.setContentsMargins(16, 16, 16, 16)
-    layout.setSpacing(8)
+    layout.setContentsMargins(10, 10, 10, 10)
+    layout.setSpacing(5)
     return layout
 
 
@@ -130,7 +130,7 @@ def apply_v3_palette(widget: QWidget) -> None:
             color: #18202b;
             background: #eef3f6;
             font-family: "Segoe UI Variable", "Aptos", "Segoe UI";
-            font-size: 10pt;
+            font-size: 8.5pt;
         }
         QWidget#V3Root {
             background: qlineargradient(
@@ -165,6 +165,21 @@ def apply_v3_palette(widget: QWidget) -> None:
             border: 1px solid #d8e2e8;
             border-radius: 16px;
         }
+        QGroupBox#V3ValveGroup {
+            background: #f8fbfc;
+            border: 1px solid #d8e2e8;
+            border-radius: 10px;
+            margin-top: 8px;
+            padding-top: 6px;
+            font-weight: 600;
+        }
+        QGroupBox#V3ValveGroup::title {
+            subcontrol-origin: margin;
+            left: 8px;
+            padding: 0 4px;
+            color: #344652;
+            background: #ffffff;
+        }
         QWidget#V3PlotPanel {
             background: #f8fbfc;
             border-left: 1px solid #d7e0e7;
@@ -174,7 +189,7 @@ def apply_v3_palette(widget: QWidget) -> None:
             color: #18202b;
             border: 1px solid #cbd7df;
             border-radius: 8px;
-            padding: 6px;
+            padding: 4px;
             selection-background-color: #2d7d9a;
             selection-color: #ffffff;
         }
@@ -183,7 +198,7 @@ def apply_v3_palette(widget: QWidget) -> None:
             color: #18202b;
             border: 1px solid #bfd0da;
             border-radius: 9px;
-            padding: 7px 12px;
+            padding: 4px 8px;
         }
         QPushButton:hover {
             background: #edf7fb;
@@ -203,13 +218,13 @@ def apply_v3_palette(widget: QWidget) -> None:
             border-color: #d7e0e7;
         }
         QLabel#V3MetricValue {
-            font-size: 18pt;
-            font-weight: 650;
+            font-size: 8.5pt;
+            font-weight: 600;
             color: #0b5c78;
         }
         QLabel#V3MetricCaption {
-            color: #60717d;
-            font-size: 9pt;
+            color: #344652;
+            font-size: 8pt;
         }
         """
     )
@@ -223,7 +238,7 @@ def stretch_row(*widgets: QWidget) -> QWidget:
     row = QWidget()
     layout = QHBoxLayout(row)
     layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(8)
+    layout.setSpacing(6)
     for widget in widgets:
         layout.addWidget(widget)
     layout.addStretch(1)

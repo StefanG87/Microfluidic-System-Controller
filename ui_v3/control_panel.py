@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QFrame, QScrollArea, QStackedWidget, QVBoxLayout, QWidget
 
-from ui_v3.cards import ExportCard, PressureCard, ProgramCard, SamplingCard, SensorCard, SettingsCard, ValveCard
+from ui_v3.cards import ExportCard, HardwareCard, PressureCard, ProgramCard, RotaryCard, SamplingCard, SensorCard, SettingsCard, ValveCard
 from ui_v3.fluent_compat import SubtitleLabel
 
 
@@ -29,31 +29,54 @@ class ControlPanel(QStackedWidget):
             "dashboard",
             "Dashboard",
             [
-                PressureCard(self.controller),
+                PressureCard(self.controller, compact_status=True),
+                SamplingCard(self.controller, show_interval=False),
+                ProgramCard(self.controller, compact=True, show_log=False),
                 SensorCard(self.controller),
-                SamplingCard(self.controller),
-                ExportCard(self.controller),
+                ValveCard(self.controller, dashboard_mode=True),
+                RotaryCard(self.controller),
             ],
+            scroll=False,
         )
         self._add_page(
             "pressure",
             "Pressure Control",
-            [PressureCard(self.controller), SensorCard(self.controller), SamplingCard(self.controller)],
+            [
+                PressureCard(self.controller),
+                SamplingCard(self.controller, show_interval=False),
+                SensorCard(self.controller),
+            ],
+            scroll=False,
         )
-        self._add_page("valves", "Valves", [ValveCard(self.controller)])
+        self._add_page("valves", "Valves", [ValveCard(self.controller)], scroll=False)
         self._add_page("program", "Program Runner", [ProgramCard(self.controller)])
-        self._add_page("settings", "Settings", [SettingsCard(self.controller), ValveCard(self.controller)])
+        self._add_page(
+            "settings",
+            "Settings",
+            [
+                HardwareCard(self.controller),
+                SamplingCard(self.controller),
+                ExportCard(self.controller),
+                SettingsCard(self.controller),
+            ],
+            scroll=False,
+        )
 
-    def _add_page(self, route: str, title: str, cards: list[QWidget]) -> None:
+    def _add_page(self, route: str, title: str, cards: list[QWidget], scroll: bool = True) -> None:
         """Add a scrollable card page."""
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
         layout.addWidget(SubtitleLabel(title))
         for card in cards:
             layout.addWidget(card)
         layout.addStretch(1)
+
+        if not scroll:
+            self.addWidget(content)
+            self._routes[route] = content
+            return
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)

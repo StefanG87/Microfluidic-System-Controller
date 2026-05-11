@@ -17,10 +17,13 @@ from modules.fluigent_wrapper import detect_fluigent_sensors
 from modules.measurement_sampler import MeasurementSampler
 from modules.measurement_session import MeasurementSession
 from modules.mf_common import (
+    list_hw_profiles,
     load_hardware_profile,
     load_hw_profile_from_prefs,
+    load_last_comport,
     load_last_modbus_ip,
     load_pressure_offset,
+    save_hw_profile_to_prefs,
     save_last_modbus_ip,
     save_pressure_offset,
 )
@@ -40,6 +43,7 @@ class V3RuntimeController(QObject):
     status_changed = Signal(object)
     device_catalog_changed = Signal(object)
     sample_ready = Signal(object)
+    sample_failed = Signal(str)
     measurement_state_changed = Signal(bool)
     program_state_changed = Signal(bool)
     program_finished = Signal()
@@ -59,6 +63,7 @@ class V3RuntimeController(QObject):
         self.valves = []
         self._valve_meta = []
         self.hw_profile = {"name": "not connected", "valve_groups": []}
+        self.hw_profile_source = load_hw_profile_from_prefs(default="stand1")
 
         self.timebase = V3Timebase()
         self.timebase.set_sampling_interval_ms(self.sampling_interval_ms)
@@ -70,6 +75,7 @@ class V3RuntimeController(QObject):
             self.measurement_session,
             self.timebase,
         )
+        self._last_status = {}
 
         self.timer = QTimer(self)
         self.timer.setInterval(self.sampling_interval_ms)
@@ -78,6 +84,9 @@ class V3RuntimeController(QObject):
         self.program_runner = ProgramRunner(self)
         self.program_thread = None
         self.program_worker = None
+        self.rotary_adapter = None
+        self.rotary_active_port = 0
+        self._sample_failure_logged = False
         self._publish_device_catalog()
         self._emit_status()
 
@@ -104,6 +113,9 @@ class V3RuntimeController(QObject):
                     save_last_modbus_ip(candidate)
                     self._initialize_hardware(profile_name)
                     self.hardware_connected = True
+                    self.timebase.reset_time()
+                    self.measurement_session.reset()
+                    self.timer.start(self.sampling_interval_ms)
                     self.append_log(f"[v3] Connected to Modbus at {candidate}")
                     self._emit_status()
                     return True
@@ -120,6 +132,8 @@ class V3RuntimeController(QObject):
     def disconnect_hardware(self) -> None:
         """Stop measurement and release the Modbus connection."""
         self.stop_measurement()
+        if self.timer.isActive():
+            self.timer.stop()
         try:
             self.close_all_valves()
             self.reset_pressure_hardware_zero_mbar()
@@ -132,7 +146,38 @@ class V3RuntimeController(QObject):
             self.append_log(f"[v3] Modbus close failed: {exc}")
         self.hardware_connected = False
         self.modbus = None
+        self.pressure_source = None
+        self.flow_sensors = []
+        self.fluigent_sensors = []
+        self.valves = []
+        self._valve_meta = []
+        self.runtime_devices.set_pressure_source(None)
+        self.runtime_devices.set_flow_sensors([])
+        self.runtime_devices.set_fluigent_sensors([])
+        self.runtime_devices.set_valves([], [])
+        self.runtime_devices.rebuild_catalog()
+        self.measurement_session.set_flow_channel_count(0)
+        self.measurement_session.set_fluigent_channel_count(0)
+        self._publish_device_catalog()
         self._emit_status()
+
+    def shutdown_for_close(self) -> None:
+        """Best-effort safe shutdown used when the v3 main window closes."""
+        try:
+            self.stop_program()
+            thread = self.program_thread
+            if thread is not None:
+                try:
+                    thread.wait(2000)
+                except RuntimeError:
+                    pass
+        except Exception as exc:
+            self.append_log(f"[v3] Program stop during shutdown failed: {exc}")
+
+        try:
+            self.disconnect_hardware()
+        except Exception as exc:
+            self.append_log(f"[v3] Hardware shutdown failed: {exc}")
 
     def refresh_device_catalog(self) -> str:
         """Refresh detectable devices without changing hardware outputs."""
@@ -178,7 +223,9 @@ class V3RuntimeController(QObject):
         self.runtime_devices.set_pressure_source(self.pressure_source)
 
         active_profile = profile_name or load_hw_profile_from_prefs(default="stand1")
+        self.hw_profile_source = active_profile
         self.hw_profile = load_hardware_profile(active_profile)
+        save_hw_profile_to_prefs(active_profile)
         self._build_valves_from_profile()
 
         self.flow_sensors = [
@@ -214,6 +261,53 @@ class V3RuntimeController(QObject):
                 self._valve_meta.append(valve_meta_from_profile_item(group, item))
         self.runtime_devices.set_valves(self.valves, self._valve_meta)
 
+    def available_hardware_profiles(self) -> list[str]:
+        """Return hardware-profile names available from the lookup folder."""
+        return list_hw_profiles() or ["stand1"]
+
+    def set_hardware_profile(self, profile_name_or_path: str, persist: bool = True) -> bool:
+        """Apply a hardware profile without changing pressure or sensor configuration."""
+        profile_key = str(profile_name_or_path or "").strip()
+        if not profile_key:
+            self.append_log("[v3] Hardware profile is empty.")
+            return False
+        if self.program_thread_is_running():
+            self.append_log("[v3] Stop the running program before changing the hardware profile.")
+            return False
+        if self.is_measuring:
+            self.append_log("[v3] Stop the measurement before changing the hardware profile.")
+            return False
+
+        profile = load_hardware_profile(profile_key)
+        if not profile.get("valve_groups"):
+            self.append_log(f"[v3] Hardware profile has no valve groups: {profile_key}")
+            return False
+
+        if self.hardware_connected:
+            try:
+                self.close_all_valves()
+            except Exception as exc:
+                self.append_log(f"[v3] Could not close valves before profile switch: {exc}")
+                return False
+
+        self.hw_profile_source = profile_key
+        self.hw_profile = profile
+
+        if self.hardware_connected and self.modbus is not None:
+            self._build_valves_from_profile()
+        else:
+            self.valves = []
+            self._valve_meta = []
+            self.runtime_devices.set_valves([], [])
+
+        self.runtime_devices.rebuild_catalog()
+        if persist:
+            save_hw_profile_to_prefs(profile_key)
+        self._publish_device_catalog()
+        self.append_log(f"[v3] Hardware profile set to '{self.hw_profile.get('name', profile_key)}'.")
+        self._emit_status()
+        return True
+
     def _publish_device_catalog(self) -> None:
         """Publish devices for editor dialogs and notify v3 widgets."""
         update_available_valves(self.device_catalog.valve_names())
@@ -222,17 +316,21 @@ class V3RuntimeController(QObject):
 
     def _emit_status(self) -> None:
         """Emit a compact status snapshot for the status bar and settings page."""
-        self.status_changed.emit(
-            {
-                "connected": self.hardware_connected,
-                "measuring": self.is_measuring,
-                "program_running": self.program_thread_is_running(),
-                "profile": self.hw_profile.get("name", "-"),
-                "sampling_interval_ms": self.sampling_interval_ms,
-                "target_pressure": self.target_pressure,
-                "offset": self.offset,
-            }
-        )
+        self._last_status = {
+            "connected": self.hardware_connected,
+            "measuring": self.is_measuring,
+            "program_running": self.program_thread_is_running(),
+            "profile": self.hw_profile.get("name", "-"),
+            "profile_source": self.hw_profile_source,
+            "sampling_interval_ms": self.sampling_interval_ms,
+            "target_pressure": self.target_pressure,
+            "offset": self.offset,
+        }
+        self.status_changed.emit(dict(self._last_status))
+
+    def status_snapshot(self) -> dict:
+        """Return the latest controller status for widgets connected after startup."""
+        return dict(self._last_status)
 
     def set_sampling_interval_ms(self, interval_ms: int) -> None:
         """Apply a sampling interval in milliseconds."""
@@ -242,24 +340,36 @@ class V3RuntimeController(QObject):
         self._emit_status()
 
     def start_measurement(self) -> None:
-        """Start a measurement run using the current sampling interval."""
+        """Reset the live plot buffers and mark a measurement run as active."""
+        if not self.hardware_connected or self.pressure_source is None:
+            self.append_log("[v3] Connect hardware before starting a measurement.")
+            self._emit_status()
+            return
         self.measurement_session.reset()
         self.timebase.reset_time()
         self.is_measuring = True
-        self.timer.start(self.sampling_interval_ms)
+        if not self.timer.isActive():
+            self.timer.start(self.sampling_interval_ms)
         self.measurement_state_changed.emit(True)
         self.append_log("[v3] Measurement started.")
         self._emit_status()
 
     def stop_measurement(self) -> None:
-        """Stop the active measurement run."""
-        if self.timer.isActive():
-            self.timer.stop()
+        """Mark the measurement as stopped while live monitoring continues."""
         if self.is_measuring:
             self.append_log("[v3] Measurement stopped.")
         self.is_measuring = False
         self.measurement_state_changed.emit(False)
         self._emit_status()
+
+    def measurement_has_data(self) -> bool:
+        """Return True when the current session contains at least one sample."""
+        return bool(self.measurement_session.time_data)
+
+    def suggest_csv_path(self, prefix: str = "measurement_v3") -> str:
+        """Return the default CSV path used by manual v3 exports."""
+        folder = CSVExporter.ensure_measurements_folder()
+        return CSVExporter.generate_filename(prefix=prefix, folder=folder)
 
     def start_measurement_from_program(self, sampling_interval_ms=None):
         """ProgramRunner-compatible measurement start."""
@@ -276,11 +386,20 @@ class V3RuntimeController(QObject):
         sample = self.measurement_sampler.sample(
             target_pressure=self.target_pressure,
             offset=self.offset,
-            rotary_active=None,
+            rotary_active=self.rotary_active_port or None,
         )
-        if sample is not None:
-            self.sample_ready.emit(sample)
+        if sample is None:
+            if not self._sample_failure_logged:
+                message = "[v3] Sampling skipped: internal pressure monitor did not return a value."
+                self.append_log(message)
+                self.sample_failed.emit(message)
+                self._sample_failure_logged = True
             self._emit_status()
+            return None
+
+        self._sample_failure_logged = False
+        self.sample_ready.emit(sample)
+        self._emit_status()
         return sample
 
     def set_target_pressure_mbar(self, value_mbar):
@@ -313,6 +432,8 @@ class V3RuntimeController(QObject):
         """Send a raw 0 mbar setpoint for reset and stop-all paths."""
         if self.pressure_source is not None:
             self.pressure_source.setDesiredPressure(0)
+        else:
+            self.append_log("[v3] Pressure controller is not connected.")
         self.target_pressure = 0.0
         self._emit_status()
 
@@ -387,8 +508,7 @@ class V3RuntimeController(QObject):
     def export_csv(self, path: str | None = None) -> str:
         """Export the current measurement session to CSV and return the path."""
         if path is None:
-            folder = CSVExporter.ensure_measurements_folder()
-            path = CSVExporter.generate_filename(prefix="measurement_v3", folder=folder)
+            path = self.suggest_csv_path()
 
         snapshot = self.measurement_session.snapshot_for_export(
             self.sampling_interval_ms,
@@ -435,6 +555,9 @@ class V3RuntimeController(QObject):
         if self.program_thread_is_running():
             self.append_log("[v3] Program already running.")
             return False
+        if not isinstance(path, str) or not os.path.isfile(path):
+            self.append_log(f"[v3] Program file not found: {path}")
+            return False
         if not self.load_program(path):
             return False
 
@@ -456,11 +579,47 @@ class V3RuntimeController(QObject):
 
     def stop_program(self) -> None:
         """Stop the currently running automation program."""
-        if self.program_worker is not None:
-            self.program_worker.stop()
-        else:
+        if not self.program_thread_is_running() and self.program_worker is None:
             self.program_runner.stop()
+            self._emit_status()
+            return
+
+        self.append_log("[v3] Program stop requested.")
+        try:
+            self.program_runner.stop()
+        except Exception as exc:
+            self.append_log(f"[v3] Program runner stop failed: {exc}")
+        if self.program_worker is not None:
+            try:
+                self.program_worker.stop()
+            except RuntimeError:
+                # The worker may already be finishing; the runner stop flag above is the important part.
+                pass
+            except Exception as exc:
+                self.append_log(f"[v3] Program worker stop failed: {exc}")
         self._emit_status()
+
+    def set_rotary_adapter(self, adapter) -> None:
+        """Attach the v3 rotary valve card for UI and automation access."""
+        self.rotary_adapter = adapter
+        try:
+            self.runtime_devices.set_rotary_widget(adapter)
+            self.refresh_rotary_catalog_state()
+        except Exception as exc:
+            self.append_log(f"[v3] Rotary catalog registration failed: {exc}")
+
+    def refresh_rotary_catalog_state(self) -> None:
+        """Refresh rotary valve catalog metadata after connection-state changes."""
+        self.runtime_devices.register_rotary_valve()
+        self._publish_device_catalog()
+        self._emit_status()
+
+    def set_rotary_active_port(self, port: int | None) -> None:
+        """Store the last known active rotary port for sampling and CSV export."""
+        try:
+            self.rotary_active_port = int(port or 0)
+        except Exception:
+            self.rotary_active_port = 0
 
     def program_thread_is_running(self) -> bool:
         """Return True while a program thread is active."""
@@ -484,18 +643,37 @@ class V3RuntimeController(QObject):
         self._emit_status()
 
     def ensure_rotary_connected_from_program(self):
-        """Placeholder for future Qt6 rotary widget integration."""
-        self.append_log("[v3] Rotary valve program control is not connected yet.")
-        return False
+        """Connect the v3 rotary valve adapter if needed."""
+        if self.rotary_adapter is None:
+            raise RuntimeError("Rotary valve UI is not available.")
+        rotary = self.rotary_adapter.rotary
+        if rotary.is_connected():
+            return True
+        port = ""
+        try:
+            port = self.rotary_adapter.com.currentText().strip()
+        except Exception:
+            port = ""
+        port = port or load_last_comport("rotary_valve") or ""
+        if not port:
+            raise RuntimeError("No rotary valve COM port is selected.")
+        rotary.connect(port, 12)
+        return True
 
     def get_rotary_state_from_program(self):
-        """Placeholder for future Qt6 rotary widget integration."""
-        return 0, 0
+        """Return `(num_ports, current_port)` for automation rotary actions."""
+        self.ensure_rotary_connected_from_program()
+        rotary = self.rotary_adapter.rotary
+        return rotary.num_ports(), rotary.position()
 
     def home_rotary_from_program(self):
-        """Placeholder for future Qt6 rotary widget integration."""
-        self.append_log("[v3] Rotary home is not available in the v3 shell yet.")
+        """Home the v3 rotary valve adapter."""
+        self.ensure_rotary_connected_from_program()
+        self.rotary_adapter.rotary.home(wait=True)
+        self.set_rotary_active_port(self.rotary_adapter.rotary.position())
 
     def goto_rotary_from_program(self, target, wait=True):
-        """Placeholder for future Qt6 rotary widget integration."""
-        self.append_log(f"[v3] Rotary goto {target} requested, but rotary v3 control is not wired yet.")
+        """Move the v3 rotary valve adapter to a target port."""
+        self.ensure_rotary_connected_from_program()
+        self.rotary_adapter.rotary.goto(int(target), wait=wait)
+        self.set_rotary_active_port(self.rotary_adapter.rotary.position())

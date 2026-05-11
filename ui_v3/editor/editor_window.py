@@ -1,8 +1,9 @@
-"""Minimal PySide6 JSON editor for v3 automation programs."""
+"""PySide6 program editor for v3 automation programs."""
 
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -13,21 +14,24 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QListWidget,
     QMessageBox,
+    QScrollArea,
     QSplitter,
     QVBoxLayout,
     QWidget,
 )
 
 from modules.program_contract import SPECIAL_STEP_NAMES, STANDARD_STEP_NAMES
+from ui_v3.editor.task_dialogs import edit_step_params, format_step_summary
 from ui_v3.fluent_compat import BodyLabel, CaptionLabel, LineEdit, PrimaryPushButton, PushButton, TextEdit, make_card_layout
 
 
 class ProgramEditorWindow(QWidget):
-    """Simple JSON-compatible editor that does not import PyQt5 editor widgets."""
+    """JSON-compatible editor that uses v3-native task parameter dialogs."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Program Editor v3")
+        self.setWindowFlag(Qt.Window, True)
+        self.setWindowTitle("Program Editor")
         self.resize(980, 640)
         self.path = None
         self.steps = []
@@ -35,27 +39,71 @@ class ProgramEditorWindow(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(10)
-        root.addWidget(BodyLabel("Program Editor v3"))
-        root.addWidget(CaptionLabel("Early Qt6 editor shell. It preserves the JSON contract used by ProgramRunner."))
+        root.addWidget(BodyLabel("Program Editor"))
 
         self.file_path = LineEdit()
         self.file_path.setPlaceholderText("Program JSON path")
-        root.addWidget(self.file_path)
 
         file_row = QHBoxLayout()
+        file_row.addWidget(self.file_path, 1)
         self.open_button = PushButton("Open")
         self.save_button = PrimaryPushButton("Save")
         self.save_as_button = PushButton("Save As")
         self.validate_button = PushButton("Validate")
         for button in (self.open_button, self.save_button, self.save_as_button, self.validate_button):
             file_row.addWidget(button)
-        file_row.addStretch(1)
         root.addLayout(file_row)
 
         splitter = QSplitter(Qt.Horizontal)
+
+        palette = QWidget()
+        palette_layout = QVBoxLayout(palette)
+        palette_layout.setContentsMargins(0, 0, 0, 0)
+        palette_layout.setSpacing(6)
+        palette_layout.addWidget(BodyLabel("Tasks"))
+        for task_name in STANDARD_STEP_NAMES:
+            button = PushButton(task_name)
+            button.clicked.connect(lambda _checked=False, name=task_name: self._add_task_by_name(name))
+            palette_layout.addWidget(button)
+        palette_layout.addWidget(BodyLabel("Special Tasks"))
+        for task_name in SPECIAL_STEP_NAMES:
+            button = PushButton(task_name)
+            button.clicked.connect(lambda _checked=False, name=task_name: self._add_task_by_name(name))
+            palette_layout.addWidget(button)
+        palette_layout.addStretch(1)
+
+        palette_scroll = QScrollArea()
+        palette_scroll.setWidgetResizable(True)
+        palette_scroll.setWidget(palette)
+        splitter.addWidget(palette_scroll)
+
+        right = QWidget()
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(8)
+        right_layout.addWidget(BodyLabel("Program Steps"))
         self.list_widget = QListWidget()
         self.list_widget.currentRowChanged.connect(self._load_selected_step)
-        splitter.addWidget(self.list_widget)
+        right_layout.addWidget(self.list_widget, 2)
+
+        step_row = QHBoxLayout()
+        self.duplicate_button = PushButton("Duplicate")
+        self.edit_params_button = PushButton("Edit Parameters")
+        self.update_button = PrimaryPushButton("Update")
+        self.remove_button = PushButton("Remove")
+        self.up_button = PushButton("Move Up")
+        self.down_button = PushButton("Move Down")
+        for button in (
+            self.duplicate_button,
+            self.edit_params_button,
+            self.update_button,
+            self.remove_button,
+            self.up_button,
+            self.down_button,
+        ):
+            step_row.addWidget(button)
+        step_row.addStretch(1)
+        right_layout.addLayout(step_row)
 
         editor = QWidget()
         editor_layout = make_card_layout(editor)
@@ -65,36 +113,29 @@ class ProgramEditorWindow(QWidget):
         self.step_type.addItems(list(STANDARD_STEP_NAMES) + list(SPECIAL_STEP_NAMES))
         self.params = TextEdit()
         self.params.setPlaceholderText('{\n  "pressure": 50\n}')
-        editor_layout.addWidget(BodyLabel("Step"))
+        editor_layout.addWidget(BodyLabel("Selected Step"))
         editor_layout.addWidget(self.active)
         editor_layout.addWidget(self.step_type)
         editor_layout.addWidget(CaptionLabel("Parameters as JSON object"))
         editor_layout.addWidget(self.params, 1)
 
-        step_row = QHBoxLayout()
-        self.add_button = PushButton("Add")
-        self.update_button = PrimaryPushButton("Update")
-        self.remove_button = PushButton("Remove")
-        self.up_button = PushButton("Move Up")
-        self.down_button = PushButton("Move Down")
-        for button in (self.add_button, self.update_button, self.remove_button, self.up_button, self.down_button):
-            step_row.addWidget(button)
-        step_row.addStretch(1)
-        editor_layout.addLayout(step_row)
-        splitter.addWidget(editor)
+        right_layout.addWidget(editor, 1)
+        splitter.addWidget(right)
         splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 2)
+        splitter.setStretchFactor(1, 3)
         root.addWidget(splitter, 1)
 
         self.open_button.clicked.connect(lambda _checked=False: self._open_dialog())
         self.save_button.clicked.connect(lambda _checked=False: self.save())
         self.save_as_button.clicked.connect(lambda _checked=False: self._save_as_dialog())
         self.validate_button.clicked.connect(lambda _checked=False: self._validate_dialog())
-        self.add_button.clicked.connect(lambda _checked=False: self._add_step())
+        self.duplicate_button.clicked.connect(lambda _checked=False: self._duplicate_selected_step())
+        self.edit_params_button.clicked.connect(lambda _checked=False: self._edit_selected_params())
         self.update_button.clicked.connect(lambda _checked=False: self._update_step())
         self.remove_button.clicked.connect(lambda _checked=False: self._remove_step())
         self.up_button.clicked.connect(lambda _checked=False: self._move_step(-1))
         self.down_button.clicked.connect(lambda _checked=False: self._move_step(1))
+        self.list_widget.itemDoubleClicked.connect(lambda _item: self._edit_selected_params())
 
     def load_file(self, path: str, show_errors: bool = True) -> bool:
         """Load a program file if it is a valid JSON step list."""
@@ -178,7 +219,7 @@ class ProgramEditorWindow(QWidget):
         self.list_widget.clear()
         for index, step in enumerate(self.steps, start=1):
             marker = "" if step.get("active", True) else " [inactive]"
-            self.list_widget.addItem(f"{index}. {step.get('type', '<missing>')}{marker}")
+            self.list_widget.addItem(f"{index}. {format_step_summary(step)}{marker}")
         if self.steps:
             self.list_widget.setCurrentRow(min(max(current, 0), len(self.steps) - 1))
 
@@ -206,6 +247,19 @@ class ProgramEditorWindow(QWidget):
             "active": self.active.isChecked(),
         }
 
+    def _add_task_by_name(self, task_name: str) -> None:
+        """Append a new task from the left task palette after editing its parameters."""
+        params = edit_step_params(self, str(task_name), {}, step_count=len(self.steps) + 1)
+        if params is None:
+            return
+        self.steps.append({
+            "type": str(task_name),
+            "params": params,
+            "active": True,
+        })
+        self._refresh_list()
+        self.list_widget.setCurrentRow(len(self.steps) - 1)
+
     def _add_step(self) -> None:
         """Append a step from the editor controls."""
         try:
@@ -215,6 +269,42 @@ class ProgramEditorWindow(QWidget):
             return
         self._refresh_list()
         self.list_widget.setCurrentRow(len(self.steps) - 1)
+
+    def _duplicate_selected_step(self) -> None:
+        """Duplicate the selected step directly below the original."""
+        row = self.list_widget.currentRow()
+        if row < 0 or row >= len(self.steps):
+            return
+        self.steps.insert(row + 1, deepcopy(self.steps[row]))
+        self._refresh_list()
+        self.list_widget.setCurrentRow(row + 1)
+
+    def _edit_selected_params(self) -> None:
+        """Open the task-specific parameter dialog for the selected step."""
+        row = self.list_widget.currentRow()
+        if row < 0 or row >= len(self.steps):
+            return
+
+        try:
+            edited_step = self._read_editor_step()
+        except Exception as exc:
+            QMessageBox.warning(self, "Edit failed", str(exc))
+            return
+
+        params = edit_step_params(
+            self,
+            edited_step["type"],
+            edited_step.get("params", {}),
+            step_count=len(self.steps),
+        )
+        if params is None:
+            return
+
+        edited_step["params"] = params
+        self.steps[row] = edited_step
+        self._refresh_list()
+        self.list_widget.setCurrentRow(row)
+        self._load_selected_step(row)
 
     def _update_step(self) -> None:
         """Replace the selected step with the editor contents."""

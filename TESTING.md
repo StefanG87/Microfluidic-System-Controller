@@ -10,6 +10,16 @@ This project controls real laboratory hardware. These checks are intended as a l
 - Start with pressure at 0 mbar and all valves closed.
 - Keep an emergency stop / power-off option reachable.
 
+## Hardware-Free Regression Checks
+
+Run these before lab testing after changes to the v3 program runner, preferences, or UI wiring:
+
+```powershell
+.\.venv-v3\Scripts\python.exe -B -m unittest tests.test_program_runner_stop tests.test_preferences
+```
+
+The stop tests cover abortable `Wait`, `Pressure Ramp`, `PolynomialPressure`, `Wait for Sensor Event`, and continuous `Flow Controller` steps without touching hardware.
+
 ## Startup Checks
 
 1. Start `main_gui.py`.
@@ -27,6 +37,8 @@ This project controls real laboratory hardware. These checks are intended as a l
 4. Toggle each configured valve open and closed once.
 5. If the rotary valve is connected, connect, home, and move to one known safe port.
 6. If Fluigent sensors are connected, read values and optionally perform software zeroing.
+
+For the `extended_pneumatic_setup` profile, confirm all 12 pneumatic outlets explicitly. The measured mapping is Outlet 1-4 on coils 0-3, Outlet 5-8 on coils 12-15, and Outlet 9-12 on coils 8-11.
 
 ## Program Runner Checks
 

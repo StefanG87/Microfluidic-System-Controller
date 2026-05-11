@@ -216,10 +216,28 @@ class DeviceCatalog:
     def to_embedded_editor_info(self) -> dict:
         """Return the legacy device-info shape consumed by the embedded editor."""
         valve_names = self.valve_names()
+        valve_descriptors = [
+            {
+                "name": actuator.name,
+                "metadata": dict(actuator.metadata or {}),
+            }
+            for actuator in self.actuators(ACTUATOR_KIND_VALVE)
+        ]
         return {
             "valves": len(valve_names),
             "valve_names": valve_names,
+            "valve_descriptors": valve_descriptors,
             "sensors": self.sensor_names(),
+            "sensor_descriptors": [
+                {
+                    "name": sensor.name,
+                    "kind": sensor.kind,
+                    "unit": sensor.unit,
+                    "source": sensor.source,
+                    "metadata": dict(sensor.metadata or {}),
+                }
+                for sensor in self.sensors()
+            ],
             "actuators": self.actuator_names(),
             "flow_sensors": self.sensor_names(SENSOR_KIND_FLOW),
             "fluigent_sensors": self.sensor_names(SENSOR_KIND_FLUIGENT_PRESSURE),
@@ -347,12 +365,20 @@ def describe_valve(meta: dict) -> ActuatorDescriptor:
 
 def describe_rotary_valve(widget=None) -> ActuatorDescriptor:
     """Describe the rotary valve UI/controller stack as one runtime actuator."""
-    controller = getattr(widget, "ctl", None)
+    controller = getattr(widget, "ctl", None) or getattr(widget, "rotary", None)
+    if controller is None and hasattr(widget, "is_connected"):
+        controller = widget
+    connected = False
+    if controller is not None and hasattr(controller, "is_connected"):
+        try:
+            connected = bool(controller.is_connected())
+        except Exception:
+            connected = False
     return ActuatorDescriptor(
         name=ACTUATOR_NAME_ROTARY_VALVE,
         kind=ACTUATOR_KIND_ROTARY_VALVE,
         source="serial",
         metadata={
-            "connected": bool(controller.is_connected()) if controller is not None else False,
+            "connected": connected,
         },
     )

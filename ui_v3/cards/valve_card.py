@@ -2,26 +2,28 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QGridLayout, QWidget
+from collections import OrderedDict
 
-from ui_v3.fluent_compat import BodyLabel, CardWidget, CaptionLabel, PushButton, make_card_layout
+from PySide6.QtWidgets import QGridLayout, QGroupBox, QVBoxLayout, QWidget
+
+from ui_v3.fluent_compat import CardWidget, CaptionLabel, PushButton, make_card_layout
 
 
 class ValveCard(CardWidget):
     """Expose profile-defined valves as dynamic toggle buttons."""
 
-    def __init__(self, controller, parent=None):
+    def __init__(self, controller, parent=None, dashboard_mode: bool = False):
         super().__init__(parent)
         self.controller = controller
+        self.dashboard_mode = bool(dashboard_mode)
         self._buttons = {}
+        self._groups = []
         layout = make_card_layout(self)
-        layout.addWidget(BodyLabel("Valves"))
-        layout.addWidget(CaptionLabel("Valve names come from the active hardware profile/catalog."))
 
         self.button_area = QWidget()
-        self.grid = QGridLayout(self.button_area)
-        self.grid.setContentsMargins(0, 0, 0, 0)
-        self.grid.setSpacing(8)
+        self.group_layout = QVBoxLayout(self.button_area)
+        self.group_layout.setContentsMargins(0, 0, 0, 0)
+        self.group_layout.setSpacing(4)
         layout.addWidget(self.button_area)
 
         self.close_all = PushButton("Close All Valves")
@@ -29,30 +31,103 @@ class ValveCard(CardWidget):
         layout.addWidget(self.close_all)
 
         controller.device_catalog_changed.connect(self._rebuild)
+        controller.status_changed.connect(self._apply_status)
         self._rebuild(controller.device_catalog.to_embedded_editor_info())
+        self._apply_status(controller.status_snapshot())
 
     def _rebuild(self, catalog_info: dict) -> None:
         """Rebuild buttons when the device catalog changes."""
-        while self.grid.count():
-            item = self.grid.takeAt(0)
+        while self.group_layout.count():
+            item = self.group_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
         self._buttons.clear()
+        self._groups.clear()
 
-        valve_names = list(catalog_info.get("valve_names", []))
-        if not valve_names:
-            self.grid.addWidget(CaptionLabel("No valves in the current catalog."), 0, 0)
+        valve_items = self._valve_items(catalog_info)
+        if self.dashboard_mode:
+            valve_items = self._dashboard_valve_items(valve_items)
+        if not valve_items:
+            self.group_layout.addWidget(CaptionLabel("No valves in the current catalog."))
             return
 
-        for index, name in enumerate(valve_names):
-            button = PushButton(name)
-            button.setCheckable(True)
-            button.clicked.connect(
-                lambda checked=False, valve_name=name, btn=button: self._set_valve(valve_name, checked, btn)
+        grouped = OrderedDict()
+        for item in valve_items:
+            grouped.setdefault(item["box"], []).append(item)
+
+        for box_title, items in grouped.items():
+            group = QGroupBox(box_title)
+            group.setObjectName("V3ValveGroup")
+            grid = QGridLayout(group)
+            grid.setContentsMargins(6, 6, 6, 6)
+            grid.setHorizontalSpacing(6)
+            grid.setVerticalSpacing(4)
+            column_count = 3 if len(items) >= 9 else 2
+
+            for index, item in enumerate(items):
+                command_name = item["name"]
+                button = PushButton(item["button_label"])
+                button.setCheckable(True)
+                button.setToolTip(command_name)
+                button.clicked.connect(
+                    lambda checked=False, valve_name=command_name, btn=button: self._set_valve(valve_name, checked, btn)
+                )
+                self._buttons[command_name] = button
+                grid.addWidget(button, index // column_count, index % column_count)
+
+            self._groups.append(group)
+            self.group_layout.addWidget(group)
+
+    @staticmethod
+    def _valve_items(catalog_info: dict) -> list[dict]:
+        """Return v2-style valve display metadata from the runtime catalog."""
+        descriptors = list(catalog_info.get("valve_descriptors", []))
+        items = []
+        for descriptor in descriptors:
+            if not isinstance(descriptor, dict):
+                continue
+            name = str(descriptor.get("name", "")).strip()
+            metadata = descriptor.get("metadata", {})
+            metadata = metadata if isinstance(metadata, dict) else {}
+            if not name:
+                continue
+            items.append(
+                {
+                    "name": name,
+                    "group": str(metadata.get("group") or "").lower(),
+                    "box": str(metadata.get("box") or "Valves"),
+                    "button_label": str(metadata.get("button_label") or name),
+                }
             )
-            self._buttons[name] = button
-            self.grid.addWidget(button, index // 2, index % 2)
+
+        if items:
+            return items
+
+        return [
+            {
+                "name": str(name),
+                "group": "",
+                "box": "Valves",
+                "button_label": str(name),
+            }
+            for name in catalog_info.get("valve_names", [])
+            if str(name).strip()
+        ]
+
+    @staticmethod
+    def _dashboard_valve_items(items: list[dict]) -> list[dict]:
+        """Keep the dashboard close to v2: first four pneumatic valves plus all fluidic valves."""
+        pneumatic_items = [item for item in items if item.get("group") == "pneumatic"]
+        fluidic_items = [item for item in items if item.get("group") == "fluidic"]
+        other_items = [
+            item
+            for item in items
+            if item.get("group") not in {"pneumatic", "fluidic"}
+        ]
+        if len(pneumatic_items) <= 4 and not fluidic_items:
+            return items
+        return pneumatic_items[:4] + fluidic_items + other_items
 
     def _set_valve(self, valve_name: str, checked: bool, button) -> None:
         """Forward the valve command and roll the UI back if the command was rejected."""
@@ -62,3 +137,10 @@ class ValveCard(CardWidget):
             button.setChecked(False)
             button.blockSignals(False)
             self.controller.append_log(f"[v3] Valve not available: {valve_name}")
+
+    def _apply_status(self, status: dict) -> None:
+        """Disable valve commands when the hardware connection is not active."""
+        enabled = bool(status.get("connected"))
+        self.close_all.setEnabled(enabled)
+        for button in self._buttons.values():
+            button.setEnabled(enabled)

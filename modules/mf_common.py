@@ -119,7 +119,16 @@ def load_pressure_offset(path: str = DEFAULT_OFFSET_PATH) -> float:
 def save_pressure_offset(offset_mbar: float, path: str = DEFAULT_OFFSET_PATH) -> bool:
     try:
         _ensure_dir(path)
-        d = {"offset": float(offset_mbar)}
+        d = {}
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    d = loaded
+            except Exception:
+                d = {}
+        d["offset"] = float(offset_mbar)
         # write to temp, then replace
         dir_ = os.path.dirname(os.path.abspath(path))
         with tempfile.NamedTemporaryFile("w", delete=False, dir=dir_, encoding="utf-8") as tmp:
@@ -132,6 +141,38 @@ def save_pressure_offset(offset_mbar: float, path: str = DEFAULT_OFFSET_PATH) ->
         return True
     except Exception as e:
         print(f"[Offset] Save failed ({path}): {e}")
+        return False
+
+
+def load_plot_settings(path: str = DEFAULT_OFFSET_PATH) -> dict:
+    """Return saved plot channel preferences stored next to the pressure offset."""
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            settings = data.get("plot", {}) if isinstance(data, dict) else {}
+            return dict(settings) if isinstance(settings, dict) else {}
+    except Exception as e:
+        print(f"[Plot] Load settings failed ({path}): {e}")
+    return {}
+
+
+def save_plot_settings(settings: dict, path: str = DEFAULT_OFFSET_PATH) -> bool:
+    """Persist plot channel preferences without overwriting the saved offset."""
+    try:
+        data = {}
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    data = loaded
+            except Exception:
+                data = {}
+        data["plot"] = dict(settings or {})
+        return _atomic_save_json(data, path)
+    except Exception as e:
+        print(f"[Plot] Save settings failed ({path}): {e}")
         return False
 
 # ---------- device prefs (e.g., rotary valve last COM) ----------
@@ -229,6 +270,28 @@ def save_hw_profile_to_prefs(name: str,
     if ok:
         print(f"[Prefs] hardware.hw_profile = {name} -> {path}")
     return ok
+
+
+def load_program_favorites(count: int = 5, path: str = DEFAULT_PREFS_PATH) -> list[str | None]:
+    """Return saved program favorite paths from the shared device preferences."""
+    data = _load_json(path)
+    favorites = data.get("programs", {}).get("favorites", [])
+    if not isinstance(favorites, list):
+        favorites = []
+    cleaned = [str(item) if item else None for item in favorites]
+    while len(cleaned) < int(count):
+        cleaned.append(None)
+    return cleaned[: int(count)]
+
+
+def save_program_favorites(favorites: list[str | None], path: str = DEFAULT_PREFS_PATH) -> bool:
+    """Persist program favorite paths without touching hardware preferences."""
+    data = _load_json(path)
+    if "programs" not in data or not isinstance(data.get("programs"), dict):
+        data["programs"] = {}
+    data["programs"]["favorites"] = [str(item) if item else None for item in favorites]
+    data["programs"]["ts"] = datetime.utcnow().isoformat() + "Z"
+    return _atomic_save_json(data, path)
 
 
 def list_system_serial_ports() -> list:
