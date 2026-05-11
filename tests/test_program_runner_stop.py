@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import os
+import tempfile
 import threading
 import time
 import unittest
@@ -13,16 +16,24 @@ from modules.program_contract import (
     PARAM_END_PRESSURE,
     PARAM_MAX_PRESSURE,
     PARAM_MIN_PRESSURE,
+    PARAM_FLOW_SENSOR,
+    PARAM_FLUIDIC_VALVE,
+    PARAM_INPUT_PRESSURE,
+    PARAM_PATH,
+    PARAM_PNEUMATIC_VALVE,
     PARAM_SAMPLE_INTERVAL,
     PARAM_SENSOR,
     PARAM_STABLE_TIME,
     PARAM_START_PRESSURE,
     PARAM_TARGET_FLOW,
     PARAM_TARGET_VALUE,
+    PARAM_TARGET_VOLUME,
     PARAM_TIME_SEC,
     PARAM_TOLERANCE,
     PARAM_TOLERANCE_PERCENT,
+    STEP_DOSE_VOLUME,
     STEP_FLOW_CONTROLLER,
+    STEP_LOAD_SEQUENCE,
     STEP_POLYNOMIAL_PRESSURE,
     STEP_PRESSURE_RAMP,
     STEP_WAIT,
@@ -38,6 +49,7 @@ class DummyGui:
         self.messages = []
         self.target_pressure = 0.0
         self.program_targets = []
+        self.valve_states = []
 
     def append_log(self, message):
         self.messages.append(str(message))
@@ -57,6 +69,10 @@ class DummyGui:
 
     def read_program_sensor_value(self, _sensor_name):
         return 0.0
+
+    def set_valve_state_by_name(self, valve_name, state, _available_valves=None):
+        self.valve_states.append((str(valve_name), bool(state)))
+        return True
 
 
 class ProgramRunnerStopTests(unittest.TestCase):
@@ -151,6 +167,46 @@ class ProgramRunnerStopTests(unittest.TestCase):
             },
             timeout=1.2,
         )
+
+    def test_stop_interrupts_dose_volume_step(self):
+        gui = self._run_and_stop(
+            {
+                "type": STEP_DOSE_VOLUME,
+                "active": True,
+                "params": {
+                    PARAM_FLOW_SENSOR: "Flow 1",
+                    PARAM_PNEUMATIC_VALVE: "Pneumatic 1",
+                    PARAM_FLUIDIC_VALVE: "Fluidic 5",
+                    PARAM_TARGET_VOLUME: 9999.0,
+                    PARAM_INPUT_PRESSURE: 25.0,
+                },
+            },
+            timeout=1.2,
+        )
+        self.assertIn(("Fluidic 5", False), gui.valve_states)
+
+    def test_stop_interrupts_loaded_sequence_wait_step(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sequence_path = os.path.join(tmpdir, "sequence.json")
+            with open(sequence_path, "w", encoding="utf-8") as handle:
+                json.dump(
+                    [
+                        {
+                            "type": STEP_WAIT,
+                            "active": True,
+                            "params": {PARAM_TIME_SEC: 2.0},
+                        }
+                    ],
+                    handle,
+                )
+
+            self._run_and_stop(
+                {
+                    "type": STEP_LOAD_SEQUENCE,
+                    "active": True,
+                    "params": {PARAM_PATH: sequence_path},
+                }
+            )
 
 
 if __name__ == "__main__":

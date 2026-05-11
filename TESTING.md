@@ -15,10 +15,10 @@ This project controls real laboratory hardware. These checks are intended as a l
 Run these before lab testing after changes to the v3 program runner, preferences, or UI wiring:
 
 ```powershell
-.\.venv-v3\Scripts\python.exe -B -m unittest tests.test_program_runner_stop tests.test_preferences
+.\.venv-v3\Scripts\python.exe -B -m unittest tests.test_program_runner_stop tests.test_program_runner_rotary tests.test_preferences
 ```
 
-The stop tests cover abortable `Wait`, `Pressure Ramp`, `PolynomialPressure`, `Wait for Sensor Event`, and continuous `Flow Controller` steps without touching hardware.
+The stop tests cover abortable `Wait`, `Pressure Ramp`, `PolynomialPressure`, `Wait for Sensor Event`, `Dose Volume`, `Load Sequence`, and continuous `Flow Controller` steps without touching hardware. The rotary tests verify JSON dispatch for `home`, `goto`, `next`, `prev`, and the `wait` flag.
 
 ## Startup Checks
 
@@ -47,6 +47,8 @@ For the `extended_pneumatic_setup` profile, confirm all 12 pneumatic outlets exp
 3. Load another program after the first one finishes to confirm thread cleanup.
 4. Abort one running program and confirm buttons are re-enabled.
 5. Confirm the log reports errors clearly instead of freezing the GUI.
+
+If a program appears not to stop during a rotary-valve action, note whether the step used `wait=true`. That path intentionally waits for the device to report `Done`; hardware-level timeout/abort behavior should be changed only after a controlled rotary-valve lab test.
 
 ## PolynomialPressure Checks
 
