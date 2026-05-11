@@ -452,8 +452,11 @@ class V3RuntimeController(QObject):
         self.offset = float(offset_mbar)
         if persist:
             try:
-                save_pressure_offset(self.offset)
-            except Exception:
+                saved = save_pressure_offset(self.offset)
+                if not saved:
+                    self.append_log("[v3] Pressure offset could not be saved to preferences.")
+            except Exception as exc:
+                self.append_log(f"[v3] Pressure offset persistence failed: {exc}")
                 if not ignore_persist_errors:
                     raise
         self._emit_status()

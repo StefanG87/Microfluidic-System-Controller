@@ -63,6 +63,7 @@ class PlotPanel(QWidget):
         self._loading_plot_settings = False
         self._manual_view_limits = None
         self._toolbar = None
+        self._layout_warning_logged = False
         self.lock_view_button = None
         self.log = None
 
@@ -714,8 +715,10 @@ class PlotPanel(QWidget):
             return
         try:
             self._figure.tight_layout(rect=(0.02, 0.02, 0.88, 0.92))
-        except Exception:
-            pass
+        except Exception as exc:
+            if not self._layout_warning_logged and self.log is not None:
+                self.log.append(f"[v3] Plot layout warning: {exc}")
+                self._layout_warning_logged = True
         handles, labels = self._axis.get_legend_handles_labels()
         if self._flow_axis is not None:
             extra_handles, extra_labels = self._flow_axis.get_legend_handles_labels()
