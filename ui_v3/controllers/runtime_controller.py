@@ -316,6 +316,11 @@ class V3RuntimeController(QObject):
 
     def _emit_status(self) -> None:
         """Emit a compact status snapshot for the status bar and settings page."""
+        valve_states = []
+        try:
+            valve_states = list(self.runtime_devices.read_valve_states())
+        except Exception as exc:
+            self.append_log(f"[v3] Valve state snapshot failed: {exc}")
         self._last_status = {
             "connected": self.hardware_connected,
             "measuring": self.is_measuring,
@@ -325,6 +330,8 @@ class V3RuntimeController(QObject):
             "sampling_interval_ms": self.sampling_interval_ms,
             "target_pressure": self.target_pressure,
             "offset": self.offset,
+            "valve_names": self.device_catalog.valve_names(),
+            "valve_states": valve_states,
         }
         self.status_changed.emit(dict(self._last_status))
 

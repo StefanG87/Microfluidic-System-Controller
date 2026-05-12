@@ -119,6 +119,7 @@ class PlotPanel(QWidget):
         self.log.setMaximumHeight(140)
         layout.addWidget(self.log)
         self._configure_axes()
+        QTimer.singleShot(0, self._activate_default_pan)
 
     def _build_checkboxes(self, layout: QVBoxLayout) -> None:
         """Create classic-style plot channel selectors below the canvas."""
@@ -205,9 +206,24 @@ class PlotPanel(QWidget):
                 self.lock_view_button.setChecked(False)
                 self.lock_view_button.blockSignals(False)
                 self._save_plot_preferences()
+            QTimer.singleShot(0, self._activate_default_pan)
             return
         if "back" in text or "forward" in text:
             QTimer.singleShot(0, self._store_manual_view_from_axes)
+            QTimer.singleShot(0, self._activate_default_pan)
+
+    def _activate_default_pan(self) -> None:
+        """Keep the plot ready for left-drag panning without an extra toolbar click."""
+        if self._toolbar is None:
+            return
+        mode = str(getattr(self._toolbar, "mode", "") or "").lower()
+        if "pan" in mode:
+            return
+        try:
+            self._toolbar.pan()
+        except Exception as exc:
+            if self.log is not None:
+                self.log.append(f"[v3] Plot pan activation failed: {exc}")
 
     def _handle_plot_release(self, event) -> None:
         """Automatically preserve a toolbar pan/zoom view during live updates."""

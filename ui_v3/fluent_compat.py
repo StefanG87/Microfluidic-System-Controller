@@ -209,6 +209,21 @@ def apply_v3_palette(widget: QWidget) -> None:
             border-color: #43a775;
             color: #0e5131;
         }
+        QPushButton#V3ValveButton[valveActive="true"] {
+            background: #008f7a;
+            border: 1px solid #006b5c;
+            color: #ffffff;
+            font-weight: 700;
+        }
+        QPushButton#V3ValveButton[valveActive="true"]:hover {
+            background: #00a88f;
+            border-color: #007a69;
+        }
+        QPushButton#V3ValveButton[valveActive="true"]:disabled {
+            background: #8abdb4;
+            border-color: #76a89f;
+            color: #f8ffff;
+        }
         QPushButton:disabled,
         QLineEdit:disabled,
         QSpinBox:disabled,

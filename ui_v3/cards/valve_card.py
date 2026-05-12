@@ -68,6 +68,8 @@ class ValveCard(CardWidget):
             for index, item in enumerate(items):
                 command_name = item["name"]
                 button = PushButton(item["button_label"])
+                button.setObjectName("V3ValveButton")
+                button.setProperty("valveActive", False)
                 button.setCheckable(True)
                 button.setToolTip(command_name)
                 button.clicked.connect(
@@ -133,14 +135,32 @@ class ValveCard(CardWidget):
         """Forward the valve command and roll the UI back if the command was rejected."""
         ok = self.controller.set_valve_state_by_name(valve_name, bool(checked))
         if not ok:
-            button.blockSignals(True)
-            button.setChecked(False)
-            button.blockSignals(False)
+            self._set_button_active(button, False)
             self.controller.append_log(f"[v3] Valve not available: {valve_name}")
 
     def _apply_status(self, status: dict) -> None:
-        """Disable valve commands when the hardware connection is not active."""
+        """Disable valve commands and mirror the latest known valve states."""
         enabled = bool(status.get("connected"))
         self.close_all.setEnabled(enabled)
+        valve_names = list(status.get("valve_names") or [])
+        valve_states = list(status.get("valve_states") or [])
+        state_by_name = {
+            str(name): bool(state)
+            for name, state in zip(valve_names, valve_states)
+        }
         for button in self._buttons.values():
             button.setEnabled(enabled)
+        for valve_name, button in self._buttons.items():
+            if valve_name in state_by_name:
+                self._set_button_active(button, state_by_name[valve_name])
+
+    @staticmethod
+    def _set_button_active(button, active: bool) -> None:
+        """Update checked state and dynamic styling for one valve button."""
+        button.blockSignals(True)
+        button.setChecked(bool(active))
+        button.setProperty("valveActive", bool(active))
+        button.blockSignals(False)
+        button.style().unpolish(button)
+        button.style().polish(button)
+        button.update()

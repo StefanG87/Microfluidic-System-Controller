@@ -30,7 +30,7 @@ def main() -> int:
     app.setApplicationName("Microfluidic System Controller v3")
     setTheme(Theme.LIGHT)
     window = V3MainWindow()
-    window.show()
+    window.showMaximized()
     return app.exec()
 
 
