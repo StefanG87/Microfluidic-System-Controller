@@ -6,7 +6,7 @@ from collections import OrderedDict
 
 from PySide6.QtWidgets import QGridLayout, QGroupBox, QVBoxLayout, QWidget
 
-from ui_v3.fluent_compat import CardWidget, CaptionLabel, PushButton, make_card_layout
+from ui_v3.fluent_compat import CardWidget, CaptionLabel, PushButton, add_info_header, make_card_layout
 
 
 class ValveCard(CardWidget):
@@ -19,6 +19,12 @@ class ValveCard(CardWidget):
         self._buttons = {}
         self._groups = []
         layout = make_card_layout(self)
+        add_info_header(
+            layout,
+            "Valves",
+            "Toggles profile-defined Modbus valve coils. Active pneumatic valves are shown in blue and active fluidic valves in green. "
+            "Close All Valves closes every configured valve without changing pressure.",
+        )
 
         self.button_area = QWidget()
         self.group_layout = QVBoxLayout(self.button_area)
@@ -70,6 +76,7 @@ class ValveCard(CardWidget):
                 button = PushButton(item["button_label"])
                 button.setObjectName("V3ValveButton")
                 button.setProperty("valveActive", False)
+                button.setProperty("valveGroup", item["group"])
                 button.setCheckable(True)
                 button.setToolTip(command_name)
                 button.clicked.connect(

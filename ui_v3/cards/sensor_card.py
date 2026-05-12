@@ -5,7 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QGridLayout, QLabel, QWidget
 
-from ui_v3.fluent_compat import BodyLabel, CardWidget, CaptionLabel, make_card_layout
+from ui_v3.fluent_compat import CardWidget, CaptionLabel, add_info_header, make_card_layout
 
 
 class SensorCard(CardWidget):
@@ -20,7 +20,12 @@ class SensorCard(CardWidget):
         self._sensor_units = {}
         self._current_column_count = 0
         layout = make_card_layout(self)
-        layout.addWidget(BodyLabel("Live Sensors"))
+        add_info_header(
+            layout,
+            "Live Sensors",
+            "Shows the latest sampled values from the runtime device catalog. "
+            "Rows are rebuilt after hardware refresh so pressure, flow, Fluigent, and future generic sensors stay aligned with CSV export.",
+        )
 
         self.status = CaptionLabel("No sample yet.")
         layout.addWidget(self.status)

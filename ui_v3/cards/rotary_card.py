@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QMessageBox, QWidg
 from modules.mf_common import load_last_comport, save_last_comport
 from modules.rotary_valve_controller import RotaryValveController
 from modules.rvm_dt import list_serial_ports
-from ui_v3.fluent_compat import BodyLabel, CardWidget, PushButton, make_card_layout
+from ui_v3.fluent_compat import CardWidget, PushButton, add_info_header, make_card_layout
 
 
 class _RotaryWorker(QObject):
@@ -57,7 +57,12 @@ class RotaryCard(CardWidget):
         self._active_port = 0
 
         layout = make_card_layout(self)
-        layout.addWidget(BodyLabel("Rotary Valve"))
+        add_info_header(
+            layout,
+            "Rotary Valve",
+            "Controls the AMF rotary valve over the selected COM port. "
+            "Home establishes the reference position; Prev, Next, and Go move to the requested port through a worker thread so the GUI remains responsive.",
+        )
 
         top = QWidget()
         top_layout = QHBoxLayout(top)

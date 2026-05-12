@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QTextEdit,
     QToolButton,
@@ -122,6 +123,28 @@ def make_card_layout(card: QWidget) -> QVBoxLayout:
     return layout
 
 
+def add_info_header(layout: QVBoxLayout, title: str, message: str) -> QPushButton:
+    """Add a compact card title row with an explanatory info button."""
+    row = QWidget()
+    row_layout = QHBoxLayout(row)
+    row_layout.setContentsMargins(0, 0, 0, 0)
+    row_layout.setSpacing(6)
+
+    row_layout.addWidget(BodyLabel(title))
+    row_layout.addStretch(1)
+
+    button = QPushButton("i")
+    button.setObjectName("V3InfoButton")
+    button.setFixedSize(22, 22)
+    button.setToolTip(f"About {title}")
+    button.setAccessibleName(f"About {title}")
+    button.clicked.connect(lambda _checked=False: QMessageBox.information(row, title, message))
+    row_layout.addWidget(button)
+
+    layout.addWidget(row)
+    return button
+
+
 def apply_v3_palette(widget: QWidget) -> None:
     """Apply the light v3 workbench style used by the modern GUI."""
     widget.setStyleSheet(
@@ -223,6 +246,42 @@ def apply_v3_palette(widget: QWidget) -> None:
             background: #8abdb4;
             border-color: #76a89f;
             color: #f8ffff;
+        }
+        QPushButton#V3ValveButton[valveGroup="pneumatic"][valveActive="true"] {
+            background: #1f6fbe;
+            border: 1px solid #174f88;
+            color: #ffffff;
+            font-weight: 700;
+        }
+        QPushButton#V3ValveButton[valveGroup="pneumatic"][valveActive="true"]:hover {
+            background: #2d82d8;
+            border-color: #1b5f9f;
+        }
+        QPushButton#V3ValveButton[valveGroup="fluidic"][valveActive="true"] {
+            background: #009b72;
+            border: 1px solid #00785a;
+            color: #ffffff;
+            font-weight: 700;
+        }
+        QPushButton#V3ValveButton[valveGroup="fluidic"][valveActive="true"]:hover {
+            background: #00b383;
+            border-color: #008866;
+        }
+        QPushButton#V3InfoButton {
+            min-width: 22px;
+            max-width: 22px;
+            min-height: 22px;
+            max-height: 22px;
+            padding: 0;
+            border-radius: 11px;
+            background: #e7f2f7;
+            border: 1px solid #8cb9cc;
+            color: #1b5d78;
+            font-weight: 700;
+        }
+        QPushButton#V3InfoButton:hover {
+            background: #d6edf6;
+            border-color: #5a9fbb;
         }
         QPushButton:disabled,
         QLineEdit:disabled,

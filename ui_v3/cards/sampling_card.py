@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QFileDialog, QSpinBox
 
-from ui_v3.fluent_compat import BodyLabel, CardWidget, PrimaryPushButton, PushButton, make_card_layout, stretch_row
+from ui_v3.fluent_compat import CardWidget, PrimaryPushButton, PushButton, add_info_header, make_card_layout, stretch_row
 
 
 class SamplingCard(CardWidget):
@@ -17,7 +17,12 @@ class SamplingCard(CardWidget):
         self.controller = controller
         self.show_interval = bool(show_interval)
         layout = make_card_layout(self)
-        layout.addWidget(BodyLabel("Recording"))
+        add_info_header(
+            layout,
+            "Recording",
+            "New Measurement clears the current buffers and restarts the plot timebase. "
+            "Live monitoring continues after hardware connection, so CSV export can also use buffered samples without an explicit measurement run.",
+        )
 
         self.interval = None
         if self.show_interval:

@@ -8,7 +8,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QCheckBox, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from modules.mf_common import load_plot_settings, save_plot_settings
-from ui_v3.fluent_compat import PushButton, SubtitleLabel, TextEdit
+from ui_v3.fluent_compat import PushButton, TextEdit, add_info_header
 
 
 class PlotPanel(QWidget):
@@ -70,7 +70,12 @@ class PlotPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(6)
-        layout.addWidget(SubtitleLabel("Live Plot"))
+        add_info_header(
+            layout,
+            "Live Plot",
+            "Displays buffered live data from the measurement session. "
+            "Use the checkboxes to choose channels, drag with the left mouse button to pan, use the mouse wheel to zoom, and Lock View to keep a manual view during live updates.",
+        )
 
         self._build_canvas(layout)
 

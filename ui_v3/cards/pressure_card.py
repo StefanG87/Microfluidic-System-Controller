@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QDoubleSpinBox
 
-from ui_v3.fluent_compat import BodyLabel, CardWidget, CaptionLabel, PrimaryPushButton, PushButton, make_card_layout, stretch_row
+from ui_v3.fluent_compat import CardWidget, CaptionLabel, PrimaryPushButton, PushButton, add_info_header, make_card_layout, stretch_row
 
 
 class PressureCard(CardWidget):
@@ -25,7 +25,12 @@ class PressureCard(CardWidget):
         self._corrected_text = "-- mbar"
         self._target_text = "0.00 mbar"
         layout = make_card_layout(self)
-        layout.addWidget(BodyLabel("Pressure Control"))
+        add_info_header(
+            layout,
+            "Pressure Control",
+            "Set Pressure sends a compensated pressure setpoint through the runtime controller. "
+            "Set Pressure to Zero uses the hardware-zero path and removes pressure output, matching the classic GUI behavior.",
+        )
 
         self.measured_label = CaptionLabel("Measured: -- mbar")
         self.corrected_label = CaptionLabel("Corrected: -- mbar")

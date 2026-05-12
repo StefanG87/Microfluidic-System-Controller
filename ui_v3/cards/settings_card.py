@@ -12,6 +12,7 @@ from ui_v3.fluent_compat import (
     CardWidget,
     CaptionLabel,
     PushButton,
+    add_info_header,
     make_card_layout,
     stretch_row,
 )
@@ -25,7 +26,12 @@ class SettingsCard(CardWidget):
         self.controller = controller
         self._updating_profile_combo = False
         layout = make_card_layout(self)
-        layout.addWidget(BodyLabel("Hardware Profile"))
+        add_info_header(
+            layout,
+            "Hardware Profile",
+            "Selects the JSON hardware profile that defines valve names, groups, coils, and display labels. "
+            "Profile changes are blocked while measuring or running a program.",
+        )
         layout.addWidget(CaptionLabel("Choose the valve mapping used by the GUI, editor, plot, and CSV export."))
 
         self.profile_combo = QComboBox()
@@ -38,7 +44,12 @@ class SettingsCard(CardWidget):
         layout.addWidget(self.profile_combo)
         layout.addWidget(stretch_row(self.refresh_profiles_button, self.open_profile_button))
 
-        layout.addWidget(BodyLabel("Pressure Offset"))
+        add_info_header(
+            layout,
+            "Pressure Offset",
+            "Stores the pressure offset used to display corrected pressure and to compensate pressure commands. "
+            "Calibration can use the internal monitor or a connected Fluigent reference sensor.",
+        )
         layout.addWidget(CaptionLabel("Offset calibration and persistence."))
 
         self.offset = QDoubleSpinBox()

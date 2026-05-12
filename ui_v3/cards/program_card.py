@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QWidget
 
 from modules.mf_common import load_program_favorites, save_program_favorites
 from ui_v3.editor.editor_window import ProgramEditorWindow
-from ui_v3.fluent_compat import BodyLabel, CardWidget, LineEdit, PrimaryPushButton, PushButton, TextEdit, make_card_layout, stretch_row
+from ui_v3.fluent_compat import BodyLabel, CardWidget, LineEdit, PrimaryPushButton, PushButton, TextEdit, add_info_header, make_card_layout, stretch_row
 
 
 class ProgramCard(CardWidget):
@@ -27,7 +27,12 @@ class ProgramCard(CardWidget):
         self.favorite_select_buttons = []
         self.favorite_run_buttons = []
         layout = make_card_layout(self)
-        layout.addWidget(BodyLabel("Program Control" if self.compact else "Program Runner"))
+        add_info_header(
+            layout,
+            "Program Control" if self.compact else "Program Runner",
+            "Loads and runs JSON automation programs through ProgramRunner. "
+            "Favorites store frequently used program files, and Stop requests cancellation without silently resetting hardware.",
+        )
 
         self.path = LineEdit()
         self.path.setPlaceholderText("Program JSON path")

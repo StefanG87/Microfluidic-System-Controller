@@ -8,12 +8,12 @@ from PySide6.QtWidgets import QComboBox, QFileDialog, QMessageBox
 
 from modules.mf_common import LOOKUP_DIR, load_hw_profile_from_prefs, load_last_modbus_ip
 from ui_v3.fluent_compat import (
-    BodyLabel,
     CardWidget,
     CaptionLabel,
     LineEdit,
     PrimaryPushButton,
     PushButton,
+    add_info_header,
     make_card_layout,
     stretch_row,
 )
@@ -27,7 +27,12 @@ class HardwareCard(CardWidget):
         self.controller = controller
         self._updating_profile_combo = False
         layout = make_card_layout(self)
-        layout.addWidget(BodyLabel("Hardware"))
+        add_info_header(
+            layout,
+            "Hardware",
+            "Connects the Modbus pressure/valve hardware and selects the active hardware profile. "
+            "Refresh Config redetects supported sensors and updates the editor, plot, and CSV channel catalog.",
+        )
 
         self.status = CaptionLabel("Status: disconnected")
         self.message = CaptionLabel("")
