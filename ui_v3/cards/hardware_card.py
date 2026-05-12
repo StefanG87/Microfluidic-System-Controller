@@ -13,6 +13,7 @@ from ui_v3.fluent_compat import (
     PushButton,
     add_info_header,
     make_card_layout,
+    mark_primary_action,
     stretch_row,
 )
 
@@ -39,7 +40,7 @@ class HardwareCard(CardWidget):
         if last_ip:
             self.ip.setText(str(last_ip))
 
-        self.connect_button = PrimaryPushButton("Connect Hardware")
+        self.connect_button = mark_primary_action(PrimaryPushButton("Connect Hardware"))
         self.disconnect_button = PushButton("Disconnect")
         self.refresh_button = PushButton("Refresh Config")
         self.connect_button.clicked.connect(lambda _checked=False: self._connect())

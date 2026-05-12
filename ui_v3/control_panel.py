@@ -59,8 +59,9 @@ class ControlPanel(QStackedWidget):
                 SamplingCard(self.controller),
                 ExportCard(self.controller),
                 SettingsCard(self.controller),
+                SensorCard(self.controller),
             ],
-            scroll=False,
+            scroll=True,
         )
 
     def _add_page(

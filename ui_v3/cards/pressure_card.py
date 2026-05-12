@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QDoubleSpinBox
 
-from ui_v3.fluent_compat import CardWidget, CaptionLabel, PrimaryPushButton, PushButton, add_info_header, make_card_layout, stretch_row
+from ui_v3.fluent_compat import CardWidget, CaptionLabel, PrimaryPushButton, PushButton, add_info_header, make_card_layout, mark_primary_action, stretch_row
 
 
 class PressureCard(CardWidget):
@@ -55,7 +55,7 @@ class PressureCard(CardWidget):
             self.offset.setSingleStep(1.0)
             self.offset.lineEdit().returnPressed.connect(self._set_offset)
 
-        self.set_button = PrimaryPushButton("Set Pressure")
+        self.set_button = mark_primary_action(PrimaryPushButton("Set Pressure"))
         self.zero_button = PushButton("Set Pressure to Zero")
         self.set_button.clicked.connect(lambda _checked=False: self._set_pressure())
         self.zero_button.clicked.connect(lambda _checked=False: self._zero_pressure())

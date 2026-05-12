@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 
 from modules.program_contract import SPECIAL_STEP_NAMES, STANDARD_STEP_NAMES
 from ui_v3.editor.task_dialogs import edit_step_params, format_step_summary
-from ui_v3.fluent_compat import BodyLabel, CaptionLabel, LineEdit, PrimaryPushButton, PushButton, TextEdit, make_card_layout
+from ui_v3.fluent_compat import BodyLabel, CaptionLabel, LineEdit, PrimaryPushButton, PushButton, TextEdit, make_card_layout, mark_primary_action
 
 
 class ProgramEditorWindow(QWidget):
@@ -47,7 +47,7 @@ class ProgramEditorWindow(QWidget):
         file_row = QHBoxLayout()
         file_row.addWidget(self.file_path, 1)
         self.open_button = PushButton("Open")
-        self.save_button = PrimaryPushButton("Save")
+        self.save_button = mark_primary_action(PrimaryPushButton("Save"))
         self.save_as_button = PushButton("Save As")
         self.validate_button = PushButton("Validate")
         for button in (self.open_button, self.save_button, self.save_as_button, self.validate_button):
@@ -89,7 +89,7 @@ class ProgramEditorWindow(QWidget):
         step_row = QHBoxLayout()
         self.duplicate_button = PushButton("Duplicate")
         self.edit_params_button = PushButton("Edit Parameters")
-        self.update_button = PrimaryPushButton("Update")
+        self.update_button = mark_primary_action(PrimaryPushButton("Update"))
         self.remove_button = PushButton("Remove")
         self.up_button = PushButton("Move Up")
         self.down_button = PushButton("Move Down")

@@ -7,6 +7,8 @@ development and automated syntax checks.
 
 from __future__ import annotations
 
+import textwrap
+
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFrame,
@@ -135,13 +137,29 @@ def add_info_header(layout: QVBoxLayout, title: str, message: str) -> QPushButto
     button = QPushButton("i")
     button.setObjectName("V3InfoButton")
     button.setFixedSize(22, 22)
-    button.setToolTip(message)
-    button.setStatusTip(message)
-    button.setWhatsThis(message)
+    wrapped_message = compact_tooltip(message)
+    button.setToolTip(wrapped_message)
+    button.setStatusTip(wrapped_message)
+    button.setWhatsThis(wrapped_message)
     button.setAccessibleName(f"About {title}")
     row_layout.addWidget(button)
 
     layout.addWidget(row)
+    return button
+
+
+def compact_tooltip(message: str, width: int = 72) -> str:
+    """Return a compact multiline tooltip string for long explanatory text."""
+    paragraphs = [part.strip() for part in str(message).splitlines() if part.strip()]
+    if not paragraphs:
+        return ""
+    return "\n".join(textwrap.fill(paragraph, width=width) for paragraph in paragraphs)
+
+
+def mark_primary_action(button: QPushButton) -> QPushButton:
+    """Mark a command button as the orange primary action used by v3."""
+    button.setObjectName("V3PrimaryButton")
+    button.setProperty("primaryAction", True)
     return button
 
 
@@ -226,6 +244,27 @@ def apply_v3_palette(widget: QWidget) -> None:
         QPushButton:hover {
             background: #edf7fb;
             border-color: #7eb4ca;
+        }
+        QPushButton#V3PrimaryButton,
+        QPushButton[primaryAction="true"],
+        PrimaryPushButton {
+            background: #f28c28;
+            border: 1px solid #b85f00;
+            color: #241100;
+            font-weight: 700;
+        }
+        QPushButton#V3PrimaryButton:hover,
+        QPushButton[primaryAction="true"]:hover,
+        PrimaryPushButton:hover {
+            background: #ff9f3d;
+            border-color: #cf7000;
+        }
+        QPushButton#V3PrimaryButton:disabled,
+        QPushButton[primaryAction="true"]:disabled,
+        PrimaryPushButton:disabled {
+            background: #ead8c4;
+            border-color: #d8c1a4;
+            color: #8b7760;
         }
         QPushButton:checked {
             background: #d7f0e5;

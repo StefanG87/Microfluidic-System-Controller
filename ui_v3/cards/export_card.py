@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QFileDialog
 
-from ui_v3.fluent_compat import CardWidget, PrimaryPushButton, PushButton, add_info_header, make_card_layout, stretch_row
+from ui_v3.fluent_compat import CardWidget, PrimaryPushButton, PushButton, add_info_header, make_card_layout, mark_primary_action, stretch_row
 
 
 class ExportCard(CardWidget):
@@ -20,7 +20,7 @@ class ExportCard(CardWidget):
             "Exports the current measurement buffer to CSV. The exporter includes pressure, flow, Fluigent sensors, valve states, rotary state, and registered future measurement channels when available.",
         )
 
-        self.auto_button = PrimaryPushButton("Export Automatically")
+        self.auto_button = mark_primary_action(PrimaryPushButton("Export Automatically"))
         self.choose_button = PushButton("Choose Path")
         self.auto_button.clicked.connect(lambda _checked=False: self._export_auto())
         self.choose_button.clicked.connect(lambda _checked=False: self._export_with_dialog())

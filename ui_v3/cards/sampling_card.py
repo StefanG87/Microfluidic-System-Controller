@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QSpinBox
 
-from ui_v3.fluent_compat import CardWidget, PrimaryPushButton, PushButton, add_info_header, make_card_layout, stretch_row
+from ui_v3.fluent_compat import CardWidget, PrimaryPushButton, PushButton, add_info_header, make_card_layout, mark_primary_action, stretch_row
 
 
 class SamplingCard(CardWidget):
@@ -32,7 +32,7 @@ class SamplingCard(CardWidget):
             self.interval.setSuffix(" ms")
             self.interval.valueChanged.connect(controller.set_sampling_interval_ms)
 
-        self.start_button = PrimaryPushButton("Refresh Plot")
+        self.start_button = mark_primary_action(PrimaryPushButton("Refresh Plot"))
         self.stop_button = PushButton("Stop + Export")
         self.export_button = PushButton("Export CSV")
         self.start_button.clicked.connect(lambda _checked=False: self._refresh_plot())

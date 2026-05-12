@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QWidget
 
 from modules.mf_common import load_program_favorites, save_program_favorites
 from ui_v3.editor.editor_window import ProgramEditorWindow
-from ui_v3.fluent_compat import BodyLabel, CardWidget, LineEdit, PrimaryPushButton, PushButton, TextEdit, add_info_header, make_card_layout, stretch_row
+from ui_v3.fluent_compat import BodyLabel, CardWidget, LineEdit, PrimaryPushButton, PushButton, TextEdit, add_info_header, make_card_layout, mark_primary_action, stretch_row
 
 
 class ProgramCard(CardWidget):
@@ -40,7 +40,7 @@ class ProgramCard(CardWidget):
             self.path.setPlaceholderText("No program selected")
             self.path.setReadOnly(True)
         self.browse_button = PushButton("Browse")
-        self.run_button = PrimaryPushButton("Run Program")
+        self.run_button = mark_primary_action(PrimaryPushButton("Run Program"))
         self.stop_button = PushButton("Stop")
         self.editor_button = PushButton("Open Editor")
         self.log = None
