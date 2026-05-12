@@ -63,7 +63,8 @@ class ProgramCard(CardWidget):
             layout.addWidget(self._favorite_row(index))
         self._apply_favorite_labels()
 
-        layout.addWidget(self.path)
+        if not self.compact:
+            layout.addWidget(self.path)
         layout.addWidget(stretch_row(self.browse_button, self.run_button, self.stop_button, self.editor_button))
         if self.log is not None:
             layout.addWidget(self.log)

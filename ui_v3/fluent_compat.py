@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
     QTextEdit,
     QToolButton,
@@ -136,9 +135,10 @@ def add_info_header(layout: QVBoxLayout, title: str, message: str) -> QPushButto
     button = QPushButton("i")
     button.setObjectName("V3InfoButton")
     button.setFixedSize(22, 22)
-    button.setToolTip(f"About {title}")
+    button.setToolTip(message)
+    button.setStatusTip(message)
+    button.setWhatsThis(message)
     button.setAccessibleName(f"About {title}")
-    button.clicked.connect(lambda _checked=False: QMessageBox.information(row, title, message))
     row_layout.addWidget(button)
 
     layout.addWidget(row)

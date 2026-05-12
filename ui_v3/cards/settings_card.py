@@ -61,15 +61,17 @@ class SettingsCard(CardWidget):
 
         self.save_offset_button = PushButton("Save Offset")
         self.zero_internal_button = PushButton("Zero From Internal")
+        self.zero_fluigent_button = PushButton("Zero Fluigent Sensors")
         self.offset_button = PushButton("Calibrate Offset...")
 
         self.save_offset_button.clicked.connect(lambda _checked=False: self._save_offset())
         self.zero_internal_button.clicked.connect(lambda _checked=False: self.controller.zero_offset_from_internal_pressure())
+        self.zero_fluigent_button.clicked.connect(lambda _checked=False: self._zero_fluigent_sensors())
         self.offset_button.clicked.connect(lambda _checked=False: self._calibrate_offset())
 
         layout.addWidget(self.offset)
         layout.addWidget(stretch_row(self.save_offset_button, self.zero_internal_button))
-        layout.addWidget(self.offset_button)
+        layout.addWidget(stretch_row(self.offset_button, self.zero_fluigent_button))
         controller.status_changed.connect(self._apply_status)
         self._reload_profiles()
         self._apply_status(controller.status_snapshot())
@@ -138,6 +140,31 @@ class SettingsCard(CardWidget):
         self.save_offset_button.setEnabled(connected)
         self.zero_internal_button.setEnabled(connected)
         self.offset_button.setEnabled(connected)
+        self.zero_fluigent_button.setEnabled(connected and bool(getattr(self.controller, "fluigent_sensors", [])))
+
+    def _zero_fluigent_sensors(self) -> None:
+        """Zero all currently detected Fluigent sensors from the settings page."""
+        if not getattr(self.controller, "fluigent_sensors", []):
+            QMessageBox.information(self, "Zero Fluigent Sensors", "No Fluigent sensors are currently detected.")
+            return
+        answer = QMessageBox.question(
+            self,
+            "Zero Fluigent Sensors",
+            "This will zero all currently detected Fluigent sensors.\n\nContinue?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+        zeroed, failed = self.controller.zero_fluigent_sensors_by_name(None)
+        if zeroed:
+            self.controller.append_log(f"[v3] Zeroed Fluigent sensors: {', '.join(zeroed)}")
+        if failed:
+            details = ", ".join(f"{name}: {exc}" for name, exc in failed)
+            self.controller.append_log(f"[v3] Fluigent zero failed: {details}")
+            QMessageBox.warning(self, "Zero Fluigent Sensors", f"Some sensors could not be zeroed:\n{details}")
+            return
+        QMessageBox.information(self, "Zero Fluigent Sensors", "All detected Fluigent sensors were zeroed.")
 
     def _calibrate_offset(self) -> None:
         """Open the v2-style pressure-offset calibration dialog."""

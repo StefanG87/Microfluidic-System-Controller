@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 
-from PySide6.QtWidgets import QGridLayout, QGroupBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QGridLayout, QGroupBox, QPushButton, QVBoxLayout, QWidget
 
 from ui_v3.fluent_compat import CardWidget, CaptionLabel, PushButton, add_info_header, make_card_layout
 
@@ -29,7 +29,7 @@ class ValveCard(CardWidget):
         self.button_area = QWidget()
         self.group_layout = QVBoxLayout(self.button_area)
         self.group_layout.setContentsMargins(0, 0, 0, 0)
-        self.group_layout.setSpacing(4)
+        self.group_layout.setSpacing(2 if self.dashboard_mode else 4)
         layout.addWidget(self.button_area)
 
         self.close_all = PushButton("Close All Valves")
@@ -66,18 +66,20 @@ class ValveCard(CardWidget):
             group = QGroupBox(box_title)
             group.setObjectName("V3ValveGroup")
             grid = QGridLayout(group)
-            grid.setContentsMargins(6, 6, 6, 6)
-            grid.setHorizontalSpacing(6)
-            grid.setVerticalSpacing(4)
+            margin = 4 if self.dashboard_mode else 6
+            grid.setContentsMargins(margin, margin, margin, margin)
+            grid.setHorizontalSpacing(4 if self.dashboard_mode else 6)
+            grid.setVerticalSpacing(2 if self.dashboard_mode else 4)
             column_count = 3 if len(items) >= 9 else 2
 
             for index, item in enumerate(items):
                 command_name = item["name"]
-                button = PushButton(item["button_label"])
+                button = QPushButton(item["button_label"])
                 button.setObjectName("V3ValveButton")
                 button.setProperty("valveActive", False)
                 button.setProperty("valveGroup", item["group"])
                 button.setCheckable(True)
+                button.setMinimumHeight(24 if self.dashboard_mode else 28)
                 button.setToolTip(command_name)
                 button.clicked.connect(
                     lambda checked=False, valve_name=command_name, btn=button: self._set_valve(valve_name, checked, btn)
@@ -167,6 +169,27 @@ class ValveCard(CardWidget):
         button.blockSignals(True)
         button.setChecked(bool(active))
         button.setProperty("valveActive", bool(active))
+        group = str(button.property("valveGroup") or "")
+        if active:
+            if group == "pneumatic":
+                button.setStyleSheet(
+                    "QPushButton { background-color: #1f6fbe; color: white; border: 1px solid #174f88; "
+                    "border-radius: 8px; font-weight: 700; padding: 3px 8px; }"
+                    "QPushButton:hover { background-color: #2d82d8; }"
+                )
+            elif group == "fluidic":
+                button.setStyleSheet(
+                    "QPushButton { background-color: #009b72; color: white; border: 1px solid #00785a; "
+                    "border-radius: 8px; font-weight: 700; padding: 3px 8px; }"
+                    "QPushButton:hover { background-color: #00b383; }"
+                )
+            else:
+                button.setStyleSheet(
+                    "QPushButton { background-color: #6b7785; color: white; border: 1px solid #4f5b66; "
+                    "border-radius: 8px; font-weight: 700; padding: 3px 8px; }"
+                )
+        else:
+            button.setStyleSheet("")
         button.blockSignals(False)
         button.style().unpolish(button)
         button.style().polish(button)

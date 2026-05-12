@@ -37,6 +37,7 @@ class ControlPanel(QStackedWidget):
                 RotaryCard(self.controller),
             ],
             scroll=False,
+            show_title=False,
         )
         self._add_page(
             "pressure",
@@ -62,13 +63,22 @@ class ControlPanel(QStackedWidget):
             scroll=False,
         )
 
-    def _add_page(self, route: str, title: str, cards: list[QWidget], scroll: bool = True) -> None:
+    def _add_page(
+        self,
+        route: str,
+        title: str,
+        cards: list[QWidget],
+        scroll: bool = True,
+        show_title: bool = True,
+    ) -> None:
         """Add a scrollable card page."""
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(6)
-        layout.addWidget(SubtitleLabel(title))
+        margin = 6 if route == "dashboard" else 10
+        layout.setContentsMargins(margin, margin, margin, margin)
+        layout.setSpacing(4 if route == "dashboard" else 6)
+        if show_title:
+            layout.addWidget(SubtitleLabel(title))
         for card in cards:
             layout.addWidget(card)
         layout.addStretch(1)
