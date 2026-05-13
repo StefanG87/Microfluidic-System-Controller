@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QDoubleSpinBox
+from PySide6.QtWidgets import QDoubleSpinBox, QMessageBox
 
-from ui_v3.fluent_compat import CardWidget, CaptionLabel, PrimaryPushButton, PushButton, add_info_header, make_card_layout, mark_primary_action, stretch_row
+from ui_v3.fluent_compat import CardWidget, CaptionLabel, LineEdit, PrimaryPushButton, PushButton, add_info_header, make_card_layout, mark_primary_action, stretch_row
 
 
 class PressureCard(CardWidget):
@@ -37,12 +37,10 @@ class PressureCard(CardWidget):
         self.target_label = CaptionLabel("Target: 0.00 mbar")
         self.status_label = CaptionLabel("Measured: -- mbar | Corrected: -- mbar | Target: 0.00 mbar")
 
-        self.pressure = QDoubleSpinBox()
-        self.pressure.setRange(-1000.0, 1000.0)
-        self.pressure.setDecimals(2)
-        self.pressure.setSuffix(" mbar")
-        self.pressure.setSingleStep(5.0)
-        self.pressure.lineEdit().returnPressed.connect(self._set_pressure)
+        self.pressure = LineEdit()
+        self.pressure.setPlaceholderText("Target pressure [mbar]")
+        self.pressure.setText("0.00")
+        self.pressure.returnPressed.connect(self._set_pressure)
 
         self.offset = None
         self.set_offset_button = None
@@ -82,13 +80,30 @@ class PressureCard(CardWidget):
 
     def _set_pressure(self) -> None:
         """Forward the selected setpoint to the controller."""
-        self.pressure.interpretText()
-        self.controller.set_target_pressure_mbar(self.pressure.value())
+        value = self._pressure_value()
+        if value is None:
+            return
+        self.controller.set_target_pressure_mbar(value)
 
     def _zero_pressure(self) -> None:
         """Use the hardware-zero path, matching the classic GUI semantics."""
         self.controller.reset_pressure_hardware_zero_mbar()
-        self.pressure.setValue(0.0)
+        self.pressure.setText("0.00")
+
+    def _pressure_value(self) -> float | None:
+        """Parse the entered pressure while accepting decimal comma or dot."""
+        text = self.pressure.text().strip().replace(",", ".")
+        if text.lower().endswith("mbar"):
+            text = text[:-4].strip()
+        try:
+            value = float(text)
+        except ValueError:
+            QMessageBox.warning(self, "Pressure", "Please enter a valid pressure in mbar.")
+            return None
+        if not -1000.0 <= value <= 1000.0:
+            QMessageBox.warning(self, "Pressure", "Pressure must be between -1000 and 1000 mbar.")
+            return None
+        return value
 
     def _set_offset(self) -> None:
         """Persist the offset selected by the user."""
@@ -98,7 +113,7 @@ class PressureCard(CardWidget):
     def _apply_status(self, status: dict) -> None:
         """Reflect the current target when the user is not editing the field."""
         if not self.pressure.hasFocus():
-            self.pressure.setValue(float(status.get("target_pressure", 0.0) or 0.0))
+            self.pressure.setText(f"{float(status.get('target_pressure', 0.0) or 0.0):.2f}")
         if self.offset is not None and not self.offset.hasFocus():
             self.offset.setValue(float(status.get("offset", 0.0) or 0.0))
         self._target_text = f"{float(status.get('target_pressure', 0.0) or 0.0):.2f} mbar"
