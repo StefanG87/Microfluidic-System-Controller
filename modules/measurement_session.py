@@ -25,6 +25,7 @@ class ExportSnapshot:
     extra_series: list | None = None
     sample_finished_time_data: list | None = None
     read_timing_data: list | None = None
+    configured_interval_data: list | None = None
 
     def with_metadata(self, offset=0.0, valve_names=None, profile_name=None, valve_coils=None):
         """Attach export metadata that lives outside the measurement buffers."""
@@ -66,6 +67,7 @@ class MeasurementSession:
         self.rotary_active = []
         self.sample_finished_time_data = []
         self.read_timing_data = []
+        self.configured_interval_data = []
 
     def set_fluigent_channel_count(self, count):
         """Resize Fluigent buffers after sensor discovery, keeping existing values when possible."""
@@ -102,12 +104,14 @@ class MeasurementSession:
         self.rotary_active.clear()
         self.sample_finished_time_data.clear()
         self.read_timing_data.clear()
+        self.configured_interval_data.clear()
 
-    def begin_sample(self, abs_time, rel_time, target_pressure):
+    def begin_sample(self, abs_time, rel_time, target_pressure, sampling_interval_ms=None):
         """Record the shared timestamps and target pressure for one sample."""
         self.time_data.append(rel_time)
         self.abs_time_data.append(abs_time)
         self.target_data.append(target_pressure)
+        self.configured_interval_data.append(sampling_interval_ms)
 
     def append_pressure_sample(self, corrected, measured):
         """Record the pressure values for the current sample."""
@@ -186,6 +190,8 @@ class MeasurementSession:
             self.abs_time_data.pop()
         if self.target_data:
             self.target_data.pop()
+        if self.configured_interval_data:
+            self.configured_interval_data.pop()
 
     def snapshot_for_export(self, sampling_interval_ms, start_timestamp):
         """Return detached copies of all buffers as an ExportSnapshot."""
@@ -203,4 +209,5 @@ class MeasurementSession:
             extra_series=self.snapshot_extra_series(),
             sample_finished_time_data=list(self.sample_finished_time_data),
             read_timing_data=[[dict(item) for item in sample] for sample in self.read_timing_data],
+            configured_interval_data=list(self.configured_interval_data),
         )

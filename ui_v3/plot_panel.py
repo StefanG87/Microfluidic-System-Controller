@@ -64,6 +64,10 @@ class PlotPanel(QWidget):
         self._manual_view_limits = None
         self._toolbar = None
         self._layout_warning_logged = False
+        self._plot_update_timer = QTimer(self)
+        self._plot_update_timer.setSingleShot(True)
+        self._plot_update_timer.setInterval(75)
+        self._plot_update_timer.timeout.connect(self.update_plot)
         self.lock_view_button = None
         self.log = None
 
@@ -192,7 +196,7 @@ class PlotPanel(QWidget):
         """Persist plot channel selection and redraw immediately."""
         if not self._loading_plot_settings:
             self._save_plot_preferences()
-        self.update_plot()
+        self._request_plot_update()
 
     def _handle_lock_view_toggled(self) -> None:
         """Persist lock-view state and autoscale again when the lock is released."""
@@ -433,9 +437,16 @@ class PlotPanel(QWidget):
         self._current_target = new_target
         if self._target and self._target[-1] != self._current_target:
             self._target[-1] = self._current_target
-            self.update_plot()
+            self._request_plot_update()
         elif target_changed and not self._target:
-            self.update_plot()
+            self._request_plot_update()
+
+    def _request_plot_update(self) -> None:
+        """Coalesce live redraws so sampling is not blocked by Matplotlib rendering."""
+        if self._axis is None:
+            return
+        if not self._plot_update_timer.isActive():
+            self._plot_update_timer.start()
 
     def _append_named_value(self, store: dict, name: str, value) -> None:
         """Keep sensor series aligned with the pressure time axis."""
@@ -761,7 +772,5 @@ class PlotPanel(QWidget):
             )
             for text in legend.get_texts():
                 text.set_color("#26333d")
-        # A synchronous draw keeps the live plot moving on lab PCs where
-        # draw_idle() may not repaint until the next resize/window event.
-        self._canvas.draw()
-        self._canvas.repaint()
+        self._canvas.draw_idle()
+        self._canvas.update()

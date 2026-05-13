@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import QObject, QThread, QTimer, Signal
+from PySide6.QtCore import QObject, QThread, QTimer, Qt, Signal
 
 from editor.modules.editor.task_globals import update_available_sensors, update_available_valves
 from modules.csv_exporter import CSVExporter
@@ -81,6 +81,7 @@ class V3RuntimeController(QObject):
         self._last_status = {}
 
         self.timer = QTimer(self)
+        self.timer.setTimerType(Qt.PreciseTimer)
         self.timer.setInterval(self.sampling_interval_ms)
         self.timer.timeout.connect(self.sample_once)
 
@@ -348,6 +349,8 @@ class V3RuntimeController(QObject):
         self.sampling_interval_ms = max(1, int(interval_ms))
         self.timebase.set_sampling_interval_ms(self.sampling_interval_ms)
         self.timer.setInterval(self.sampling_interval_ms)
+        if self.timer.isActive():
+            self.timer.start(self.sampling_interval_ms)
         self._emit_status()
 
     def set_include_read_timing(self, enabled: bool, persist: bool = True) -> bool:
@@ -406,6 +409,7 @@ class V3RuntimeController(QObject):
             target_pressure=self.target_pressure,
             offset=self.offset,
             rotary_active=self.rotary_active_port or None,
+            sampling_interval_ms=self.sampling_interval_ms,
         )
         if sample is None:
             if not self._sample_failure_logged:
@@ -563,6 +567,7 @@ class V3RuntimeController(QObject):
             include_read_timing=self.include_read_timing,
             sample_finished_time_data=snapshot.sample_finished_time_data,
             read_timing_data=snapshot.read_timing_data,
+            configured_interval_data=snapshot.configured_interval_data,
         )
         self.append_log(f"[v3] CSV export saved to:\n{path}")
         return path

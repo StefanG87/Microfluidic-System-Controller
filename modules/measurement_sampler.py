@@ -43,14 +43,21 @@ class MeasurementSampler:
             timebase = sampling_manager
         self.timebase = timebase
 
-    def sample(self, *, target_pressure, offset, rotary_active=None) -> MeasurementSample | None:
+    def sample(
+        self,
+        *,
+        target_pressure,
+        offset,
+        rotary_active=None,
+        sampling_interval_ms=None,
+    ) -> MeasurementSample | None:
         """Read one acquisition tick; return None if the pressure readout failed."""
         abs_time, rel_time = self.timebase.get_timestamps()
         if abs_time is None or rel_time is None:
             self.timebase.reset_time()
             abs_time, rel_time = self.timebase.get_timestamps()
 
-        self.measurement_session.begin_sample(abs_time, rel_time, target_pressure)
+        self.measurement_session.begin_sample(abs_time, rel_time, target_pressure, sampling_interval_ms)
         read_timings: list[ReadTiming] = []
 
         raw_pressure = self._timed_read("internal_pressure", self._read_raw_pressure, read_timings)

@@ -155,6 +155,7 @@ class CSVExporter:
         include_read_timing=False,
         sample_finished_time_data=None,
         read_timing_data=None,
+        configured_interval_data=None,
     ):
         """Write one complete measurement export to `path` using the established CSV format."""
         rotary_active = rotary_active or []
@@ -168,6 +169,7 @@ class CSVExporter:
         ]
         sample_finished_time_data = list(sample_finished_time_data) if sample_finished_time_data else []
         read_timing_data = list(read_timing_data) if read_timing_data else []
+        configured_interval_data = list(configured_interval_data) if configured_interval_data else []
         timing_channels = CSVExporter._timing_channels(read_timing_data) if include_read_timing else []
 
         with open(path, "w", newline="", encoding="utf-8-sig") as f:
@@ -192,7 +194,13 @@ class CSVExporter:
 
             header = ["Absolute Time [ISO]", "Time [s]", "Target [mbar]", "Corrected [mbar]", "Measured [mbar]"]
             if include_read_timing:
-                header += ["Sample Start Epoch [s]", "Sample Finished Epoch [s]", "Sample Duration [ms]"]
+                header += [
+                    "Configured Interval [ms]",
+                    "Actual Sample Period [ms]",
+                    "Sample Start Epoch [s]",
+                    "Sample Finished Epoch [s]",
+                    "Sample Duration [ms]",
+                ]
                 for channel in timing_channels:
                     header += [
                         f"{channel} read start offset [ms]",
@@ -222,7 +230,19 @@ class CSVExporter:
 
                 if include_read_timing:
                     sample_finished = sample_finished_time_data[i] if i < len(sample_finished_time_data) else None
+                    configured_interval = (
+                        configured_interval_data[i]
+                        if i < len(configured_interval_data) and configured_interval_data[i] is not None
+                        else sampling_interval_ms
+                    )
+                    actual_period_ms = (
+                        (float(time_data[i]) - float(time_data[i - 1])) * 1000.0
+                        if i > 0 and i < len(time_data)
+                        else None
+                    )
                     row += [
+                        str(configured_interval) if configured_interval is not None else "",
+                        CSVExporter._decimal_float(actual_period_ms, decimals=3),
                         CSVExporter._decimal_float(abs_timestamp, decimals=6),
                         CSVExporter._decimal_float(sample_finished, decimals=6),
                         CSVExporter._decimal_float(
