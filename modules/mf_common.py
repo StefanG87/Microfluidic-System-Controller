@@ -313,6 +313,26 @@ def save_export_read_timing_enabled(enabled: bool, path: str = DEFAULT_PREFS_PAT
     return _atomic_save_json(data, path)
 
 
+def load_export_prefix(default: str = "measurement", path: str = DEFAULT_PREFS_PATH) -> str:
+    """Return the saved prefix used for timestamped CSV exports."""
+    data = _load_json(path)
+    export_settings = data.get("export", {})
+    if not isinstance(export_settings, dict):
+        return str(default)
+    prefix = str(export_settings.get("prefix", "") or "").strip()
+    return prefix or str(default)
+
+
+def save_export_prefix(prefix: str, path: str = DEFAULT_PREFS_PATH) -> bool:
+    """Persist the prefix used for timestamped CSV exports."""
+    data = _load_json(path)
+    if "export" not in data or not isinstance(data.get("export"), dict):
+        data["export"] = {}
+    data["export"]["prefix"] = str(prefix or "").strip() or "measurement"
+    data["export"]["ts"] = datetime.utcnow().isoformat() + "Z"
+    return _atomic_save_json(data, path)
+
+
 def list_system_serial_ports() -> list:
     """
     Return the available serial port names as strings.

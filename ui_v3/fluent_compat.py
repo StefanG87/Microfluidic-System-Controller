@@ -157,27 +157,27 @@ def compact_tooltip(message: str, width: int = 58) -> str:
 
 
 def mark_primary_action(button: QPushButton) -> QPushButton:
-    """Mark a command button as the orange primary action used by v3."""
+    """Mark a command button as the calm teal primary action used by v3."""
     button.setObjectName("V3PrimaryButton")
     button.setProperty("primaryAction", True)
     button.setStyleSheet(
         """
         QPushButton {
-            background-color: #f28c28;
-            border: 1px solid #b85f00;
-            color: #241100;
+            background-color: #2f6f73;
+            border: 1px solid #25595c;
+            color: #ffffff;
             font-weight: 700;
             border-radius: 9px;
             padding: 4px 8px;
         }
         QPushButton:hover {
-            background-color: #ff9f3d;
-            border-color: #cf7000;
+            background-color: #377f84;
+            border-color: #2a6367;
         }
         QPushButton:disabled {
-            background-color: #ead8c4;
-            border-color: #d8c1a4;
-            color: #8b7760;
+            background-color: #d4e0e2;
+            border-color: #c1d0d2;
+            color: #74878a;
         }
         """
     )
@@ -269,63 +269,63 @@ def apply_v3_palette(widget: QWidget) -> None:
         QPushButton#V3PrimaryButton,
         QPushButton[primaryAction="true"],
         PrimaryPushButton {
-            background: #f28c28;
-            border: 1px solid #b85f00;
-            color: #241100;
+            background: #2f6f73;
+            border: 1px solid #25595c;
+            color: #ffffff;
             font-weight: 700;
         }
         QPushButton#V3PrimaryButton:hover,
         QPushButton[primaryAction="true"]:hover,
         PrimaryPushButton:hover {
-            background: #ff9f3d;
-            border-color: #cf7000;
+            background: #377f84;
+            border-color: #2a6367;
         }
         QPushButton#V3PrimaryButton:disabled,
         QPushButton[primaryAction="true"]:disabled,
         PrimaryPushButton:disabled {
-            background: #ead8c4;
-            border-color: #d8c1a4;
-            color: #8b7760;
+            background: #d4e0e2;
+            border-color: #c1d0d2;
+            color: #74878a;
         }
         QPushButton:checked {
-            background: #d7f0e5;
-            border-color: #43a775;
-            color: #0e5131;
+            background: #dcebec;
+            border-color: #7ca9ad;
+            color: #244e52;
         }
         QPushButton#V3ValveButton[valveActive="true"] {
-            background: #008f7a;
-            border: 1px solid #006b5c;
+            background: #3b6f78;
+            border: 1px solid #2b535a;
             color: #ffffff;
             font-weight: 700;
         }
         QPushButton#V3ValveButton[valveActive="true"]:hover {
-            background: #00a88f;
-            border-color: #007a69;
+            background: #467f89;
+            border-color: #33636b;
         }
         QPushButton#V3ValveButton[valveActive="true"]:disabled {
-            background: #8abdb4;
-            border-color: #76a89f;
+            background: #8aa9ae;
+            border-color: #78989d;
             color: #f8ffff;
         }
         QPushButton#V3ValveButton[valveGroup="pneumatic"][valveActive="true"] {
-            background: #1f6fbe;
-            border: 1px solid #174f88;
+            background: #3b6f78;
+            border: 1px solid #2b535a;
             color: #ffffff;
             font-weight: 700;
         }
         QPushButton#V3ValveButton[valveGroup="pneumatic"][valveActive="true"]:hover {
-            background: #2d82d8;
-            border-color: #1b5f9f;
+            background: #467f89;
+            border-color: #33636b;
         }
         QPushButton#V3ValveButton[valveGroup="fluidic"][valveActive="true"] {
-            background: #009b72;
-            border: 1px solid #00785a;
+            background: #3b6f78;
+            border: 1px solid #2b535a;
             color: #ffffff;
             font-weight: 700;
         }
         QPushButton#V3ValveButton[valveGroup="fluidic"][valveActive="true"]:hover {
-            background: #00b383;
-            border-color: #008866;
+            background: #467f89;
+            border-color: #33636b;
         }
         QPushButton#V3InfoButton {
             min-width: 22px;

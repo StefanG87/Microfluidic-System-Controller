@@ -20,11 +20,13 @@ from modules.mf_common import (
     list_hw_profiles,
     load_hardware_profile,
     load_export_read_timing_enabled,
+    load_export_prefix,
     load_hw_profile_from_prefs,
     load_last_comport,
     load_last_modbus_ip,
     load_pressure_offset,
     save_export_read_timing_enabled,
+    save_export_prefix,
     save_hw_profile_to_prefs,
     save_last_modbus_ip,
     save_pressure_offset,
@@ -57,6 +59,7 @@ class V3RuntimeController(QObject):
         self.target_pressure = 0.0
         self.sampling_interval_ms = 250
         self.include_read_timing = load_export_read_timing_enabled(default=False)
+        self.export_prefix = load_export_prefix(default="measurement")
         self.hardware_connected = False
         self.is_measuring = False
         self.modbus = None
@@ -333,6 +336,7 @@ class V3RuntimeController(QObject):
             "profile_source": self.hw_profile_source,
             "sampling_interval_ms": self.sampling_interval_ms,
             "include_read_timing": self.include_read_timing,
+            "export_prefix": self.export_prefix,
             "target_pressure": self.target_pressure,
             "offset": self.offset,
             "valve_names": self.device_catalog.valve_names(),
@@ -361,6 +365,14 @@ class V3RuntimeController(QObject):
         self._emit_status()
         return self.include_read_timing
 
+    def set_export_prefix(self, prefix: str, persist: bool = True) -> str:
+        """Set the prefix used by timestamped CSV exports."""
+        self.export_prefix = CSVExporter.sanitize_prefix(prefix)
+        if persist and not save_export_prefix(self.export_prefix):
+            self.append_log("[v3] Export prefix preference could not be saved.")
+        self._emit_status()
+        return self.export_prefix
+
     def start_measurement(self) -> None:
         """Reset the live plot buffers and mark a measurement run as active."""
         if not self.hardware_connected or self.pressure_source is None:
@@ -388,10 +400,10 @@ class V3RuntimeController(QObject):
         """Return True when the current session contains at least one sample."""
         return bool(self.measurement_session.time_data)
 
-    def suggest_csv_path(self, prefix: str = "measurement_v3") -> str:
+    def suggest_csv_path(self, prefix: str | None = None) -> str:
         """Return the default CSV path used by manual v3 exports."""
         folder = CSVExporter.ensure_measurements_folder()
-        return CSVExporter.generate_filename(prefix=prefix, folder=folder)
+        return CSVExporter.generate_filename(prefix=prefix or self.export_prefix, folder=folder)
 
     def start_measurement_from_program(self, sampling_interval_ms=None):
         """ProgramRunner-compatible measurement start."""

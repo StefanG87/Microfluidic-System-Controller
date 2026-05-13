@@ -2,6 +2,7 @@
 
 import csv
 import os
+import re
 from datetime import datetime
 
 from modules.mf_common import writable_app_root
@@ -16,6 +17,7 @@ class CSVExporter:
         if folder is None:
             folder = os.getcwd()
 
+        prefix = CSVExporter.sanitize_prefix(prefix)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         base = f"{prefix}_{timestamp}"
         filename = f"{base}{extension}"
@@ -28,6 +30,13 @@ class CSVExporter:
             counter += 1
 
         return path
+
+    @staticmethod
+    def sanitize_prefix(prefix):
+        """Return a filesystem-safe export prefix while preserving readable names."""
+        text = str(prefix or "").strip() or "measurement"
+        text = re.sub(r"[^\w\-]+", "_", text, flags=re.UNICODE).strip("_")
+        return text or "measurement"
 
     @staticmethod
     def ensure_measurements_folder():

@@ -8,8 +8,10 @@ import unittest
 
 from modules.mf_common import (
     load_export_read_timing_enabled,
+    load_export_prefix,
     load_program_favorites,
     save_export_read_timing_enabled,
+    save_export_prefix,
     save_program_favorites,
 )
 
@@ -42,6 +44,18 @@ class PreferenceHelperTests(unittest.TestCase):
             self.assertTrue(save_export_read_timing_enabled(True, path=path))
 
             self.assertTrue(load_export_read_timing_enabled(path=path))
+            self.assertEqual(load_program_favorites(count=1, path=path), favorites)
+
+    def test_export_prefix_roundtrip_preserves_other_preferences(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "device_prefs.json")
+            favorites = [r"C:\programs\prime.json"]
+
+            self.assertTrue(save_program_favorites(favorites, path=path))
+            self.assertEqual(load_export_prefix(path=path), "measurement")
+            self.assertTrue(save_export_prefix("kinetics", path=path))
+
+            self.assertEqual(load_export_prefix(path=path), "kinetics")
             self.assertEqual(load_program_favorites(count=1, path=path), favorites)
 
 

@@ -22,7 +22,7 @@ class ValveCard(CardWidget):
         add_info_header(
             layout,
             "Valves",
-            "Toggles profile-defined Modbus valve coils. Active pneumatic valves are shown in blue and active fluidic valves in green. "
+            "Toggles profile-defined Modbus valve coils. Active valves are highlighted with the shared v3 accent color. "
             "Close All Valves closes every configured valve without changing pressure.",
         )
 
@@ -169,25 +169,12 @@ class ValveCard(CardWidget):
         button.blockSignals(True)
         button.setChecked(bool(active))
         button.setProperty("valveActive", bool(active))
-        group = str(button.property("valveGroup") or "")
         if active:
-            if group == "pneumatic":
-                button.setStyleSheet(
-                    "QPushButton { background-color: #1f6fbe; color: white; border: 1px solid #174f88; "
-                    "border-radius: 8px; font-weight: 700; padding: 3px 8px; }"
-                    "QPushButton:hover { background-color: #2d82d8; }"
-                )
-            elif group == "fluidic":
-                button.setStyleSheet(
-                    "QPushButton { background-color: #009b72; color: white; border: 1px solid #00785a; "
-                    "border-radius: 8px; font-weight: 700; padding: 3px 8px; }"
-                    "QPushButton:hover { background-color: #00b383; }"
-                )
-            else:
-                button.setStyleSheet(
-                    "QPushButton { background-color: #6b7785; color: white; border: 1px solid #4f5b66; "
-                    "border-radius: 8px; font-weight: 700; padding: 3px 8px; }"
-                )
+            button.setStyleSheet(
+                "QPushButton { background-color: #3b6f78; color: white; border: 1px solid #2b535a; "
+                "border-radius: 8px; font-weight: 700; padding: 3px 8px; }"
+                "QPushButton:hover { background-color: #467f89; }"
+            )
         else:
             button.setStyleSheet("")
         button.blockSignals(False)
