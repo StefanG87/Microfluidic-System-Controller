@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QCheckBox, QFileDialog
 
+from modules.csv_exporter import CSVExporter
 from ui_v3.fluent_compat import (
     CardWidget,
     CaptionLabel,
@@ -35,7 +36,7 @@ class ExportCard(CardWidget):
         self.prefix.setPlaceholderText("measurement")
         self.prefix.editingFinished.connect(self._save_prefix)
         self.auto_button = mark_primary_action(PrimaryPushButton("Export with Timestamp"))
-        self.choose_button = PushButton("Choose Path")
+        self.choose_button = PushButton("Export As...")
         self.read_timing_checkbox = QCheckBox("Include read timing metadata")
         self.read_timing_checkbox.setToolTip(
             compact_tooltip(
@@ -95,6 +96,7 @@ class ExportCard(CardWidget):
             return
         try:
             self._save_prefix()
+            path = CSVExporter.normalize_csv_path(path)
             self.controller.export_csv(path)
         except Exception as exc:
             self.controller.append_log(f"[v3] CSV export failed: {exc}")

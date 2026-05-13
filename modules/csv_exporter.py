@@ -39,6 +39,14 @@ class CSVExporter:
         return text or "measurement"
 
     @staticmethod
+    def normalize_csv_path(path):
+        """Return a CSV path, appending .csv when the user omitted the suffix."""
+        text = os.fspath(path)
+        if os.path.splitext(text)[1].lower() != ".csv":
+            return f"{text}.csv"
+        return text
+
+    @staticmethod
     def ensure_measurements_folder():
         """Create and return the default Measurements folder for the active runtime."""
         measurements_folder = os.path.join(writable_app_root(), "Measurements")

@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QSpinBox
 
+from modules.csv_exporter import CSVExporter
 from ui_v3.fluent_compat import CardWidget, PrimaryPushButton, PushButton, add_info_header, make_card_layout, mark_primary_action, stretch_row
 
 
@@ -106,8 +105,7 @@ class SamplingCard(CardWidget):
         )
         if not path:
             return
-        if Path(path).suffix.lower() != ".csv":
-            path = f"{path}.csv"
+        path = CSVExporter.normalize_csv_path(path)
         try:
             self.controller.export_csv(path)
         except Exception as exc:
@@ -130,8 +128,7 @@ class SamplingCard(CardWidget):
         if not path:
             self.controller.append_log("[v3] Manual measurement stopped; CSV export skipped by user.")
             return
-        if Path(path).suffix.lower() != ".csv":
-            path = f"{path}.csv"
+        path = CSVExporter.normalize_csv_path(path)
         try:
             self.controller.export_csv(path)
         except Exception as exc:
