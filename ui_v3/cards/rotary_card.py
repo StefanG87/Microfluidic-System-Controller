@@ -47,9 +47,10 @@ class _RotaryWorker(QObject):
 class RotaryCard(CardWidget):
     """Compact v2-style rotary valve control using the shared controller layer."""
 
-    def __init__(self, controller, parent=None):
+    def __init__(self, controller, parent=None, show_connection_controls: bool = True):
         super().__init__(parent)
         self.runtime_controller = controller
+        self.show_connection_controls = bool(show_connection_controls)
         self.rotary = RotaryValveController()
         self._thread = None
         self._worker = None
@@ -64,8 +65,8 @@ class RotaryCard(CardWidget):
             "Home establishes the reference position; Prev, Next, and Go move to the requested port through a worker thread so the GUI remains responsive.",
         )
 
-        top = QWidget()
-        top_layout = QHBoxLayout(top)
+        self.connection_row = QWidget()
+        top_layout = QHBoxLayout(self.connection_row)
         top_layout.setContentsMargins(0, 0, 0, 0)
         top_layout.setSpacing(6)
         self.com = QComboBox()
@@ -75,7 +76,8 @@ class RotaryCard(CardWidget):
         top_layout.addWidget(self.com, 1)
         top_layout.addWidget(self.refresh_button)
         top_layout.addWidget(self.connect_button)
-        layout.addWidget(top)
+        self.connection_row.setVisible(self.show_connection_controls)
+        layout.addWidget(self.connection_row)
 
         status_row = QWidget()
         status_layout = QHBoxLayout(status_row)
@@ -132,6 +134,18 @@ class RotaryCard(CardWidget):
             if index >= 0:
                 self.com.setCurrentIndex(index)
 
+    def set_selected_port(self, port: str) -> None:
+        """Select a COM port in the hidden/shared connection state."""
+        clean_port = str(port or "").strip()
+        if not clean_port:
+            return
+        index = self.com.findText(clean_port)
+        if index < 0:
+            self.com.addItem(clean_port)
+            index = self.com.findText(clean_port)
+        if index >= 0:
+            self.com.setCurrentIndex(index)
+
     def autoconnect_saved(self) -> None:
         """Reconnect the rotary valve automatically when a saved port is present."""
         if load_last_comport("rotary_valve") and self.com.currentText().strip():
@@ -147,6 +161,15 @@ class RotaryCard(CardWidget):
             return False
         self._run_worker("connect", {"port": port, "positions": 12})
         return True
+
+    def connection_summary(self) -> str:
+        """Return a compact connection summary for settings pages."""
+        port = self.com.currentText().strip() or "-"
+        if self._busy:
+            return f"Busy | COM: {port}"
+        if self.rotary.is_connected():
+            return f"Connected | COM: {port}"
+        return f"Disconnected | COM: {port}"
 
     def ensure_connected(self) -> bool:
         """Connect from automation paths when the UI is not connected yet."""
@@ -304,3 +327,88 @@ class RotaryCard(CardWidget):
         """Enable or disable rotary motion buttons."""
         for widget in (self.home_button, self.prev_button, self.next_button, self.goto, self.go_button):
             widget.setEnabled(bool(enabled))
+
+
+class RotaryConnectionCard(CardWidget):
+    """Hardware-settings card for the shared dashboard rotary adapter."""
+
+    def __init__(self, controller, parent=None):
+        super().__init__(parent)
+        self.controller = controller
+        layout = make_card_layout(self)
+        add_info_header(
+            layout,
+            "Rotary Valve Connection",
+            "Selects and connects the rotary-valve COM port. The Dashboard keeps the movement controls so routine operation stays compact.",
+        )
+
+        self.status = QLabel("Status: -")
+        self.com = QComboBox()
+        self.refresh_button = PushButton("Refresh Ports")
+        self.connect_button = PushButton("Connect Rotary")
+        row = QWidget()
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(6)
+        row_layout.addWidget(QLabel("COM:"))
+        row_layout.addWidget(self.com, 1)
+        row_layout.addWidget(self.refresh_button)
+        row_layout.addWidget(self.connect_button)
+
+        layout.addWidget(self.status)
+        layout.addWidget(row)
+
+        self.refresh_button.clicked.connect(lambda _checked=False: self.refresh_ports())
+        self.connect_button.clicked.connect(lambda _checked=False: self.connect_rotary())
+        self.poll_timer = QTimer(self)
+        self.poll_timer.setInterval(500)
+        self.poll_timer.timeout.connect(self._sync_status)
+        self.refresh_ports()
+        self.poll_timer.start()
+        self._sync_status()
+
+    def _adapter(self) -> RotaryCard | None:
+        """Return the dashboard rotary adapter registered on the runtime controller."""
+        adapter = getattr(self.controller, "rotary_adapter", None)
+        return adapter if isinstance(adapter, RotaryCard) else None
+
+    def refresh_ports(self) -> None:
+        """Refresh COM ports and preselect the saved or adapter-selected port."""
+        current = ""
+        adapter = self._adapter()
+        if adapter is not None:
+            adapter.refresh_ports()
+            current = adapter.com.currentText().strip()
+        self.com.clear()
+        for port in list_serial_ports():
+            self.com.addItem(port)
+        preferred = current or load_last_comport("rotary_valve") or ""
+        if preferred:
+            index = self.com.findText(preferred)
+            if index < 0:
+                self.com.addItem(preferred)
+                index = self.com.findText(preferred)
+            if index >= 0:
+                self.com.setCurrentIndex(index)
+        self._sync_status()
+
+    def connect_rotary(self) -> None:
+        """Connect the shared dashboard rotary adapter through the selected COM port."""
+        adapter = self._adapter()
+        if adapter is None:
+            QMessageBox.information(self, "Rotary Valve", "Rotary controls are not available yet.")
+            return
+        port = self.com.currentText().strip()
+        adapter.set_selected_port(port)
+        adapter.connect_rotary()
+        self._sync_status()
+
+    def _sync_status(self) -> None:
+        """Mirror shared rotary connection state into the settings card."""
+        adapter = self._adapter()
+        if adapter is None:
+            self.status.setText("Status: dashboard rotary control not initialized")
+            self.connect_button.setEnabled(False)
+            return
+        self.status.setText(adapter.connection_summary())
+        self.connect_button.setEnabled(not adapter._busy and not adapter.is_connected())

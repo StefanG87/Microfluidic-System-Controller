@@ -4,7 +4,18 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QFrame, QScrollArea, QStackedWidget, QVBoxLayout, QWidget
 
-from ui_v3.cards import ExportCard, HardwareCard, PressureCard, ProgramCard, RotaryCard, SamplingCard, SensorCard, SettingsCard, ValveCard
+from ui_v3.cards import (
+    ExportCard,
+    HardwareCard,
+    PressureCard,
+    ProgramCard,
+    RotaryCard,
+    RotaryConnectionCard,
+    SamplingCard,
+    SensorCard,
+    SettingsCard,
+    ValveCard,
+)
 from ui_v3.fluent_compat import SubtitleLabel
 
 
@@ -25,6 +36,7 @@ class ControlPanel(QStackedWidget):
 
     def _build_pages(self) -> None:
         """Create the first set of v3 pages."""
+        self._rotary_card = RotaryCard(self.controller, show_connection_controls=False)
         self._add_page(
             "dashboard",
             "Dashboard",
@@ -34,7 +46,7 @@ class ControlPanel(QStackedWidget):
                 ProgramCard(self.controller, compact=True, show_log=False),
                 SensorCard(self.controller),
                 ValveCard(self.controller, dashboard_mode=True),
-                RotaryCard(self.controller),
+                self._rotary_card,
             ],
             scroll=False,
             show_title=False,
@@ -56,6 +68,7 @@ class ControlPanel(QStackedWidget):
             "Settings",
             [
                 HardwareCard(self.controller),
+                RotaryConnectionCard(self.controller),
                 SettingsCard(self.controller, show_profile=True, show_pressure_offset=False),
                 SamplingCard(self.controller),
                 ExportCard(self.controller),
