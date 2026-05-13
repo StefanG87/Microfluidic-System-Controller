@@ -8,7 +8,6 @@ from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QFileDialog, QInputDial
 
 from modules.mf_common import LOOKUP_DIR
 from ui_v3.fluent_compat import (
-    BodyLabel,
     CardWidget,
     CaptionLabel,
     PushButton,
@@ -19,65 +18,87 @@ from ui_v3.fluent_compat import (
 
 
 class SettingsCard(CardWidget):
-    """Pressure-offset settings kept away from the main cockpit."""
+    """Profile and pressure-offset settings card with selectable sections."""
 
-    def __init__(self, controller, parent=None):
+    def __init__(
+        self,
+        controller,
+        parent=None,
+        *,
+        show_profile: bool = True,
+        show_pressure_offset: bool = True,
+    ):
         super().__init__(parent)
         self.controller = controller
+        self.show_profile = bool(show_profile)
+        self.show_pressure_offset = bool(show_pressure_offset)
         self._updating_profile_combo = False
+        self.profile_combo = None
+        self.refresh_profiles_button = None
+        self.open_profile_button = None
+        self.offset = None
+        self.save_offset_button = None
+        self.zero_internal_button = None
+        self.zero_fluigent_button = None
+        self.offset_button = None
         layout = make_card_layout(self)
-        add_info_header(
-            layout,
-            "Hardware Profile",
-            "Selects the JSON hardware profile that defines valve names, groups, coils, and display labels. "
-            "Profile changes are blocked while measuring or running a program.",
-        )
-        layout.addWidget(CaptionLabel("Choose the valve mapping used by the GUI, editor, plot, and CSV export."))
+        if self.show_profile:
+            add_info_header(
+                layout,
+                "Hardware Profile",
+                "Selects the JSON hardware profile that defines valve names, groups, coils, and display labels. "
+                "Profile changes are blocked while measuring or running a program.",
+            )
+            layout.addWidget(CaptionLabel("Choose the valve mapping used by the GUI, editor, plot, and CSV export."))
 
-        self.profile_combo = QComboBox()
-        self.profile_combo.currentIndexChanged.connect(self._on_profile_selected)
-        self.refresh_profiles_button = PushButton("Refresh List")
-        self.open_profile_button = PushButton("Open Profile JSON...")
-        self.refresh_profiles_button.clicked.connect(lambda _checked=False: self._reload_profiles())
-        self.open_profile_button.clicked.connect(lambda _checked=False: self._open_profile_file())
+            self.profile_combo = QComboBox()
+            self.profile_combo.currentIndexChanged.connect(self._on_profile_selected)
+            self.refresh_profiles_button = PushButton("Refresh List")
+            self.open_profile_button = PushButton("Open Profile JSON...")
+            self.refresh_profiles_button.clicked.connect(lambda _checked=False: self._reload_profiles())
+            self.open_profile_button.clicked.connect(lambda _checked=False: self._open_profile_file())
 
-        layout.addWidget(self.profile_combo)
-        layout.addWidget(stretch_row(self.refresh_profiles_button, self.open_profile_button))
+            layout.addWidget(self.profile_combo)
+            layout.addWidget(stretch_row(self.refresh_profiles_button, self.open_profile_button))
 
-        add_info_header(
-            layout,
-            "Pressure Offset",
-            "Stores the pressure offset used to display corrected pressure and to compensate pressure commands. "
-            "Calibration can use the internal monitor or a connected Fluigent reference sensor.",
-        )
-        layout.addWidget(CaptionLabel("Offset calibration and persistence."))
+        if self.show_pressure_offset:
+            add_info_header(
+                layout,
+                "Pressure Offset",
+                "Stores the pressure offset used to display corrected pressure and to compensate pressure commands. "
+                "Calibration can use the internal monitor or a connected Fluigent reference sensor.",
+            )
+            layout.addWidget(CaptionLabel("Offset calibration and persistence."))
 
-        self.offset = QDoubleSpinBox()
-        self.offset.setRange(-1000.0, 1000.0)
-        self.offset.setDecimals(3)
-        self.offset.setSuffix(" mbar")
-        self.offset.setSingleStep(1.0)
-        self.offset.lineEdit().returnPressed.connect(self._save_offset)
+            self.offset = QDoubleSpinBox()
+            self.offset.setRange(-1000.0, 1000.0)
+            self.offset.setDecimals(3)
+            self.offset.setSuffix(" mbar")
+            self.offset.setSingleStep(1.0)
+            self.offset.lineEdit().returnPressed.connect(self._save_offset)
 
-        self.save_offset_button = PushButton("Save Offset")
-        self.zero_internal_button = PushButton("Zero From Internal")
-        self.zero_fluigent_button = PushButton("Zero Fluigent Sensors")
-        self.offset_button = PushButton("Calibrate Offset...")
+            self.save_offset_button = PushButton("Save Offset")
+            self.zero_internal_button = PushButton("Zero From Internal")
+            self.zero_fluigent_button = PushButton("Zero Fluigent Sensors")
+            self.offset_button = PushButton("Calibrate Offset...")
 
-        self.save_offset_button.clicked.connect(lambda _checked=False: self._save_offset())
-        self.zero_internal_button.clicked.connect(lambda _checked=False: self.controller.zero_offset_from_internal_pressure())
-        self.zero_fluigent_button.clicked.connect(lambda _checked=False: self._zero_fluigent_sensors())
-        self.offset_button.clicked.connect(lambda _checked=False: self._calibrate_offset())
+            self.save_offset_button.clicked.connect(lambda _checked=False: self._save_offset())
+            self.zero_internal_button.clicked.connect(lambda _checked=False: self.controller.zero_offset_from_internal_pressure())
+            self.zero_fluigent_button.clicked.connect(lambda _checked=False: self._zero_fluigent_sensors())
+            self.offset_button.clicked.connect(lambda _checked=False: self._calibrate_offset())
 
-        layout.addWidget(self.offset)
-        layout.addWidget(stretch_row(self.save_offset_button, self.zero_internal_button))
-        layout.addWidget(stretch_row(self.offset_button, self.zero_fluigent_button))
+            layout.addWidget(self.offset)
+            layout.addWidget(stretch_row(self.save_offset_button, self.zero_internal_button))
+            layout.addWidget(stretch_row(self.offset_button, self.zero_fluigent_button))
         controller.status_changed.connect(self._apply_status)
-        self._reload_profiles()
+        if self.show_profile:
+            self._reload_profiles()
         self._apply_status(controller.status_snapshot())
 
     def _reload_profiles(self) -> None:
         """Reload profile names from lookup and keep the active item selected."""
+        if self.profile_combo is None:
+            return
         current = str(self.controller.status_snapshot().get("profile_source") or "")
         active_name = str(self.controller.status_snapshot().get("profile") or "")
         profiles = list(self.controller.available_hardware_profiles())
@@ -98,7 +119,7 @@ class SettingsCard(CardWidget):
 
     def _on_profile_selected(self, _index: int) -> None:
         """Apply a profile selected from the lookup dropdown."""
-        if self._updating_profile_combo:
+        if self._updating_profile_combo or self.profile_combo is None:
             return
         profile = self.profile_combo.currentData()
         if not profile:
@@ -108,6 +129,8 @@ class SettingsCard(CardWidget):
 
     def _open_profile_file(self) -> None:
         """Load an explicit profile JSON file selected by the user."""
+        if self.profile_combo is None:
+            return
         path, _selected_filter = QFileDialog.getOpenFileName(
             self,
             "Open Hardware Profile",
@@ -123,24 +146,28 @@ class SettingsCard(CardWidget):
 
     def _save_offset(self) -> None:
         """Persist the manually entered pressure offset."""
+        if self.offset is None:
+            return
         self.controller.set_offset_mbar(self.offset.value(), persist=True, ignore_persist_errors=True)
 
     def _apply_status(self, status: dict) -> None:
         """Keep the offset field aligned unless the user is editing it."""
-        if str(self.profile_combo.currentData() or "") != str(status.get("profile_source") or ""):
-            self._reload_profiles()
-        if not self.offset.hasFocus():
-            self.offset.setValue(float(status.get("offset", 0.0) or 0.0))
         connected = bool(status.get("connected"))
         busy = bool(status.get("measuring")) or bool(status.get("program_running"))
-        self.profile_combo.setEnabled(not busy)
-        self.refresh_profiles_button.setEnabled(not busy)
-        self.open_profile_button.setEnabled(not busy)
-        self.offset.setEnabled(connected)
-        self.save_offset_button.setEnabled(connected)
-        self.zero_internal_button.setEnabled(connected)
-        self.offset_button.setEnabled(connected)
-        self.zero_fluigent_button.setEnabled(connected and bool(getattr(self.controller, "fluigent_sensors", [])))
+        if self.profile_combo is not None:
+            if str(self.profile_combo.currentData() or "") != str(status.get("profile_source") or ""):
+                self._reload_profiles()
+            self.profile_combo.setEnabled(not busy)
+            self.refresh_profiles_button.setEnabled(not busy)
+            self.open_profile_button.setEnabled(not busy)
+        if self.offset is not None:
+            if not self.offset.hasFocus():
+                self.offset.setValue(float(status.get("offset", 0.0) or 0.0))
+            self.offset.setEnabled(connected)
+            self.save_offset_button.setEnabled(connected)
+            self.zero_internal_button.setEnabled(connected)
+            self.offset_button.setEnabled(connected)
+            self.zero_fluigent_button.setEnabled(connected and bool(getattr(self.controller, "fluigent_sensors", [])))
 
     def _zero_fluigent_sensors(self) -> None:
         """Zero all currently detected Fluigent sensors from the settings page."""

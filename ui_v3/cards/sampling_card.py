@@ -54,11 +54,12 @@ class SamplingCard(CardWidget):
             self.interval.blockSignals(False)
         measuring = bool(status.get("measuring"))
         connected = bool(status.get("connected"))
+        program_running = bool(status.get("program_running"))
         self.start_button.setEnabled(connected)
         self.stop_button.setEnabled(measuring)
         self.export_button.setEnabled(self.controller.measurement_has_data())
         if self.interval is not None:
-            self.interval.setEnabled(not measuring)
+            self.interval.setEnabled(connected and not program_running)
 
     def _refresh_plot(self) -> None:
         """Clear current buffers and restart the plot timebase after user confirmation."""

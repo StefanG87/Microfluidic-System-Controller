@@ -44,7 +44,7 @@ class ControlPanel(QStackedWidget):
             "Pressure Control",
             [
                 PressureCard(self.controller),
-                SamplingCard(self.controller, show_interval=False),
+                SettingsCard(self.controller, show_profile=False, show_pressure_offset=True),
                 SensorCard(self.controller),
             ],
             scroll=False,
@@ -56,9 +56,9 @@ class ControlPanel(QStackedWidget):
             "Settings",
             [
                 HardwareCard(self.controller),
+                SettingsCard(self.controller, show_profile=True, show_pressure_offset=False),
                 SamplingCard(self.controller),
                 ExportCard(self.controller),
-                SettingsCard(self.controller),
                 SensorCard(self.controller),
             ],
             scroll=True,

@@ -148,7 +148,7 @@ def add_info_header(layout: QVBoxLayout, title: str, message: str) -> QPushButto
     return button
 
 
-def compact_tooltip(message: str, width: int = 72) -> str:
+def compact_tooltip(message: str, width: int = 58) -> str:
     """Return a compact multiline tooltip string for long explanatory text."""
     paragraphs = [part.strip() for part in str(message).splitlines() if part.strip()]
     if not paragraphs:
@@ -160,6 +160,27 @@ def mark_primary_action(button: QPushButton) -> QPushButton:
     """Mark a command button as the orange primary action used by v3."""
     button.setObjectName("V3PrimaryButton")
     button.setProperty("primaryAction", True)
+    button.setStyleSheet(
+        """
+        QPushButton {
+            background-color: #f28c28;
+            border: 1px solid #b85f00;
+            color: #241100;
+            font-weight: 700;
+            border-radius: 9px;
+            padding: 4px 8px;
+        }
+        QPushButton:hover {
+            background-color: #ff9f3d;
+            border-color: #cf7000;
+        }
+        QPushButton:disabled {
+            background-color: #ead8c4;
+            border-color: #d8c1a4;
+            color: #8b7760;
+        }
+        """
+    )
     return button
 
 
