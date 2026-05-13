@@ -57,7 +57,6 @@ class ControlPanel(QStackedWidget):
             [
                 PressureCard(self.controller),
                 SettingsCard(self.controller, show_profile=False, show_pressure_offset=True),
-                SensorCard(self.controller),
             ],
             scroll=False,
         )
@@ -70,7 +69,7 @@ class ControlPanel(QStackedWidget):
                 HardwareCard(self.controller),
                 RotaryConnectionCard(self.controller),
                 SettingsCard(self.controller, show_profile=True, show_pressure_offset=False),
-                SamplingCard(self.controller),
+                SamplingCard(self.controller, show_controls=False),
                 ExportCard(self.controller),
                 SensorCard(self.controller),
             ],

@@ -12,17 +12,26 @@ from ui_v3.fluent_compat import CardWidget, PrimaryPushButton, PushButton, add_i
 class SamplingCard(CardWidget):
     """Configure sampling interval and measurement state."""
 
-    def __init__(self, controller, parent=None, show_interval: bool = True):
+    def __init__(self, controller, parent=None, show_interval: bool = True, show_controls: bool = True):
         super().__init__(parent)
         self.controller = controller
         self.show_interval = bool(show_interval)
+        self.show_controls = bool(show_controls)
         layout = make_card_layout(self)
-        add_info_header(
-            layout,
-            "Recording",
-            "New Measurement clears the current buffers and restarts the plot timebase. "
-            "Live monitoring continues after hardware connection, so CSV export can also use buffered samples without an explicit measurement run.",
-        )
+        if self.show_controls:
+            add_info_header(
+                layout,
+                "Recording",
+                "Refresh Plot clears the current buffers and restarts the plot timebase. "
+                "Live monitoring continues after hardware connection, so CSV export can also use buffered samples without an explicit measurement run.",
+            )
+        else:
+            add_info_header(
+                layout,
+                "Acquisition",
+                "Sets the requested sampling interval for live monitoring. "
+                "Detailed exports can additionally report the actual sample period reached during the run.",
+            )
 
         self.interval = None
         if self.show_interval:
@@ -32,16 +41,21 @@ class SamplingCard(CardWidget):
             self.interval.setSuffix(" ms")
             self.interval.valueChanged.connect(controller.set_sampling_interval_ms)
 
-        self.start_button = mark_primary_action(PrimaryPushButton("Refresh Plot"))
-        self.stop_button = PushButton("Stop + Export")
-        self.export_button = PushButton("Export CSV")
-        self.start_button.clicked.connect(lambda _checked=False: self._refresh_plot())
-        self.stop_button.clicked.connect(lambda _checked=False: self._stop_measurement())
-        self.export_button.clicked.connect(lambda _checked=False: self._export_csv())
+        self.start_button = None
+        self.stop_button = None
+        self.export_button = None
+        if self.show_controls:
+            self.start_button = mark_primary_action(PrimaryPushButton("Refresh Plot"))
+            self.stop_button = PushButton("Stop + Export")
+            self.export_button = PushButton("Export CSV")
+            self.start_button.clicked.connect(lambda _checked=False: self._refresh_plot())
+            self.stop_button.clicked.connect(lambda _checked=False: self._stop_measurement())
+            self.export_button.clicked.connect(lambda _checked=False: self._export_csv())
 
         if self.interval is not None:
             layout.addWidget(self.interval)
-        layout.addWidget(stretch_row(self.start_button, self.stop_button, self.export_button))
+        if self.show_controls:
+            layout.addWidget(stretch_row(self.start_button, self.stop_button, self.export_button))
         controller.status_changed.connect(self._apply_status)
         controller.sample_ready.connect(lambda _sample: self._apply_status(controller.status_snapshot()))
         self._apply_status(controller.status_snapshot())
@@ -55,9 +69,12 @@ class SamplingCard(CardWidget):
         measuring = bool(status.get("measuring"))
         connected = bool(status.get("connected"))
         program_running = bool(status.get("program_running"))
-        self.start_button.setEnabled(connected)
-        self.stop_button.setEnabled(measuring)
-        self.export_button.setEnabled(self.controller.measurement_has_data())
+        if self.start_button is not None:
+            self.start_button.setEnabled(connected)
+        if self.stop_button is not None:
+            self.stop_button.setEnabled(measuring)
+        if self.export_button is not None:
+            self.export_button.setEnabled(self.controller.measurement_has_data())
         if self.interval is not None:
             self.interval.setEnabled(connected and not program_running)
 
