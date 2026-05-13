@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+
+@dataclass(frozen=True)
+class ReadTiming:
+    """Timing metadata for one channel read inside a sampling tick."""
+
+    channel: str
+    started_abs: float
+    finished_abs: float
 
 
 @dataclass(frozen=True)
@@ -18,6 +27,8 @@ class MeasurementSample:
     fluigent_values: list[tuple[str, float]]
     extra_values: list[tuple[str, object, str]]
     rotary_active: int | None
+    sample_finished_abs: float | None = None
+    read_timings: list[ReadTiming] = field(default_factory=list)
 
 
 class MeasurementSampler:
@@ -40,8 +51,9 @@ class MeasurementSampler:
             abs_time, rel_time = self.timebase.get_timestamps()
 
         self.measurement_session.begin_sample(abs_time, rel_time, target_pressure)
+        read_timings: list[ReadTiming] = []
 
-        raw_pressure = self._read_raw_pressure()
+        raw_pressure = self._timed_read("internal_pressure", self._read_raw_pressure, read_timings)
         if raw_pressure is None:
             self.measurement_session.rollback_partial_sample()
             return None
@@ -50,14 +62,16 @@ class MeasurementSampler:
         corrected_pressure = measured_pressure - offset
         self.measurement_session.append_pressure_sample(corrected_pressure, measured_pressure)
 
-        valve_states = self.runtime_devices.read_valve_states()
+        valve_states = self._timed_read("valves", self.runtime_devices.read_valve_states, read_timings)
         self.measurement_session.append_valve_states(valve_states)
 
-        flow_values = self._append_flow_values()
-        fluigent_values = self._append_fluigent_values()
-        extra_values = self._append_extra_values()
+        flow_values = self._append_flow_values(read_timings)
+        fluigent_values = self._append_fluigent_values(read_timings)
+        extra_values = self._append_extra_values(read_timings)
 
         self.measurement_session.append_rotary_active(rotary_active)
+        sample_finished_abs = self._current_abs_time()
+        self.measurement_session.append_sample_timing(sample_finished_abs, read_timings)
 
         return MeasurementSample(
             abs_time=abs_time,
@@ -69,7 +83,23 @@ class MeasurementSampler:
             fluigent_values=fluigent_values,
             extra_values=extra_values,
             rotary_active=rotary_active,
+            sample_finished_abs=sample_finished_abs,
+            read_timings=list(read_timings),
         )
+
+    def _current_abs_time(self) -> float:
+        """Return the current absolute timestamp from the shared timebase."""
+        abs_time, _rel_time = self.timebase.get_timestamps()
+        return abs_time
+
+    def _timed_read(self, channel: str, read_func, timings: list[ReadTiming]):
+        """Run one sensor/hardware read and record its timing metadata."""
+        started_abs = self._current_abs_time()
+        try:
+            return read_func()
+        finally:
+            finished_abs = self._current_abs_time()
+            timings.append(ReadTiming(str(channel), started_abs, finished_abs))
 
     def _read_raw_pressure(self):
         """Read the internal pressure monitor without applying offset correction."""
@@ -78,29 +108,30 @@ class MeasurementSampler:
             return None
         return pressure_source.getRawMonitorValue()
 
-    def _append_flow_values(self) -> list[tuple[str, float]]:
+    def _append_flow_values(self, read_timings: list[ReadTiming]) -> list[tuple[str, float]]:
         """Read configured flow channels and append display-safe values."""
         values = []
         for index, sensor in enumerate(self.runtime_devices.flow_sensors):
-            raw_value = sensor.read_flow()
+            name = getattr(sensor, "name", f"Flow {index + 1}")
+            raw_value = self._timed_read(f"flow:{name}", sensor.read_flow, read_timings)
             value = raw_value if raw_value is not None else 0.0
             self.measurement_session.append_flow_value(index, value)
-            values.append((getattr(sensor, "name", f"Flow {index + 1}"), value))
+            values.append((name, value))
         return values
 
-    def _append_fluigent_values(self) -> list[tuple[str, float]]:
+    def _append_fluigent_values(self, read_timings: list[ReadTiming]) -> list[tuple[str, float]]:
         """Read detected Fluigent channels and append display-safe values."""
         values = []
         for index, sensor in enumerate(self.runtime_devices.fluigent_sensors):
-            raw_value = sensor.read_pressure()
-            value = raw_value if raw_value is not None else 0.0
-            self.measurement_session.append_fluigent_pressure_value(index, value)
             device_sn = getattr(sensor, "device_sn", "")
             label = f"SN{device_sn}" if device_sn else f"Fluigent {index + 1}"
+            raw_value = self._timed_read(f"fluigent:{label}", sensor.read_pressure, read_timings)
+            value = raw_value if raw_value is not None else 0.0
+            self.measurement_session.append_fluigent_pressure_value(index, value)
             values.append((label, value))
         return values
 
-    def _append_extra_values(self) -> list[tuple[str, object, str]]:
+    def _append_extra_values(self, read_timings: list[ReadTiming]) -> list[tuple[str, object, str]]:
         """Read generic measurement channels and append them for CSV export."""
         values = []
         for channel in self.runtime_devices.measurement_channels:
@@ -109,7 +140,7 @@ class MeasurementSampler:
                 continue
             unit = str(getattr(channel, "unit", "") or "").strip()
             try:
-                value = channel.read()
+                value = self._timed_read(f"extra:{name}", channel.read, read_timings)
             except Exception:
                 value = None
             self.measurement_session.register_extra_series(name, unit)

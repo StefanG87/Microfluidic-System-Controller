@@ -19,10 +19,12 @@ from modules.measurement_session import MeasurementSession
 from modules.mf_common import (
     list_hw_profiles,
     load_hardware_profile,
+    load_export_read_timing_enabled,
     load_hw_profile_from_prefs,
     load_last_comport,
     load_last_modbus_ip,
     load_pressure_offset,
+    save_export_read_timing_enabled,
     save_hw_profile_to_prefs,
     save_last_modbus_ip,
     save_pressure_offset,
@@ -54,6 +56,7 @@ class V3RuntimeController(QObject):
         self.offset = load_pressure_offset()
         self.target_pressure = 0.0
         self.sampling_interval_ms = 250
+        self.include_read_timing = load_export_read_timing_enabled(default=False)
         self.hardware_connected = False
         self.is_measuring = False
         self.modbus = None
@@ -328,6 +331,7 @@ class V3RuntimeController(QObject):
             "profile": self.hw_profile.get("name", "-"),
             "profile_source": self.hw_profile_source,
             "sampling_interval_ms": self.sampling_interval_ms,
+            "include_read_timing": self.include_read_timing,
             "target_pressure": self.target_pressure,
             "offset": self.offset,
             "valve_names": self.device_catalog.valve_names(),
@@ -345,6 +349,14 @@ class V3RuntimeController(QObject):
         self.timebase.set_sampling_interval_ms(self.sampling_interval_ms)
         self.timer.setInterval(self.sampling_interval_ms)
         self._emit_status()
+
+    def set_include_read_timing(self, enabled: bool, persist: bool = True) -> bool:
+        """Enable or disable detailed read-timing metadata in CSV exports."""
+        self.include_read_timing = bool(enabled)
+        if persist and not save_export_read_timing_enabled(self.include_read_timing):
+            self.append_log("[v3] Export timing preference could not be saved.")
+        self._emit_status()
+        return self.include_read_timing
 
     def start_measurement(self) -> None:
         """Reset the live plot buffers and mark a measurement run as active."""
@@ -548,6 +560,9 @@ class V3RuntimeController(QObject):
             valve_coils=snapshot.valve_coils,
             fluigent_sensors=self.fluigent_sensors,
             extra_series=snapshot.extra_series,
+            include_read_timing=self.include_read_timing,
+            sample_finished_time_data=snapshot.sample_finished_time_data,
+            read_timing_data=snapshot.read_timing_data,
         )
         self.append_log(f"[v3] CSV export saved to:\n{path}")
         return path

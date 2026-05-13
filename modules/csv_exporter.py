@@ -42,6 +42,16 @@ class CSVExporter:
         return str(value).replace(".", ",")
 
     @staticmethod
+    def _decimal_float(value, decimals=3):
+        """Format a numeric value with fixed decimals and decimal comma."""
+        if value in ("", None):
+            return ""
+        try:
+            return CSVExporter._decimal_text(f"{float(value):.{int(decimals)}f}")
+        except Exception:
+            return ""
+
+    @staticmethod
     def _fluigent_header(fluigent_sensors, fluigent_data):
         """Return sensor-specific Fluigent column labels when sensor metadata is available."""
         if fluigent_sensors and len(fluigent_sensors) == len(fluigent_data):
@@ -93,6 +103,36 @@ class CSVExporter:
         return list(values) if values is not None else []
 
     @staticmethod
+    def _timing_attr(timing, key, default=None):
+        """Read one timing field from dict-like or object-like metadata."""
+        if isinstance(timing, dict):
+            return timing.get(key, default)
+        return getattr(timing, key, default)
+
+    @staticmethod
+    def _timing_channels(read_timing_data):
+        """Return timing-channel labels in first-seen order."""
+        channels = []
+        seen = set()
+        for sample in read_timing_data or []:
+            for timing in sample or []:
+                channel = str(CSVExporter._timing_attr(timing, "channel", "")).strip()
+                if channel and channel not in seen:
+                    seen.add(channel)
+                    channels.append(channel)
+        return channels
+
+    @staticmethod
+    def _timing_by_channel(sample_timing):
+        """Return one timing row indexed by channel label."""
+        indexed = {}
+        for timing in sample_timing or []:
+            channel = str(CSVExporter._timing_attr(timing, "channel", "")).strip()
+            if channel:
+                indexed[channel] = timing
+        return indexed
+
+    @staticmethod
     def write_measurement_csv(
         path,
         *,
@@ -112,6 +152,9 @@ class CSVExporter:
         valve_coils=None,
         fluigent_sensors=None,
         extra_series=None,
+        include_read_timing=False,
+        sample_finished_time_data=None,
+        read_timing_data=None,
     ):
         """Write one complete measurement export to `path` using the established CSV format."""
         rotary_active = rotary_active or []
@@ -123,6 +166,9 @@ class CSVExporter:
             for series in (list(extra_series) if extra_series else [])
             if str(CSVExporter._series_attr(series, "name", "")).strip()
         ]
+        sample_finished_time_data = list(sample_finished_time_data) if sample_finished_time_data else []
+        read_timing_data = list(read_timing_data) if read_timing_data else []
+        timing_channels = CSVExporter._timing_channels(read_timing_data) if include_read_timing else []
 
         with open(path, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f, delimiter=";")
@@ -131,6 +177,8 @@ class CSVExporter:
             writer.writerow(["Offset [mbar]", f"{offset:.2f}".replace(".", ",")])
             writer.writerow(["Sampling interval [ms]", str(sampling_interval_ms)])
             writer.writerow(["Hardware profile", profile_name or "-"])
+            if include_read_timing:
+                writer.writerow(["Detailed read timing", "enabled"])
             if valve_coils and valve_names:
                 writer.writerow(["Valve mapping (name -> coil)"])
                 for i, name in enumerate(valve_names):
@@ -143,6 +191,13 @@ class CSVExporter:
                 writer.writerow(["Start timestamp (absolute)", dt.strftime("%Y-%m-%d %H:%M:%S")])
 
             header = ["Absolute Time [ISO]", "Time [s]", "Target [mbar]", "Corrected [mbar]", "Measured [mbar]"]
+            if include_read_timing:
+                header += ["Sample Start Epoch [s]", "Sample Finished Epoch [s]", "Sample Duration [ms]"]
+                for channel in timing_channels:
+                    header += [
+                        f"{channel} read start offset [ms]",
+                        f"{channel} read duration [ms]",
+                    ]
             valve_header = CSVExporter._valve_header(valve_names, valve_states)
             header += valve_header
 
@@ -164,6 +219,40 @@ class CSVExporter:
                     CSVExporter._decimal_text(corrected[i] if i < len(corrected) else 0.0),
                     CSVExporter._decimal_text(measured[i] if i < len(measured) else 0.0),
                 ]
+
+                if include_read_timing:
+                    sample_finished = sample_finished_time_data[i] if i < len(sample_finished_time_data) else None
+                    row += [
+                        CSVExporter._decimal_float(abs_timestamp, decimals=6),
+                        CSVExporter._decimal_float(sample_finished, decimals=6),
+                        CSVExporter._decimal_float(
+                            (float(sample_finished) - float(abs_timestamp)) * 1000.0
+                            if sample_finished is not None
+                            else None,
+                            decimals=3,
+                        ),
+                    ]
+                    timing_by_channel = CSVExporter._timing_by_channel(
+                        read_timing_data[i] if i < len(read_timing_data) else []
+                    )
+                    for channel in timing_channels:
+                        timing = timing_by_channel.get(channel)
+                        started = CSVExporter._timing_attr(timing, "started_abs") if timing is not None else None
+                        finished = CSVExporter._timing_attr(timing, "finished_abs") if timing is not None else None
+                        row += [
+                            CSVExporter._decimal_float(
+                                (float(started) - float(abs_timestamp)) * 1000.0
+                                if started is not None
+                                else None,
+                                decimals=3,
+                            ),
+                            CSVExporter._decimal_float(
+                                (float(finished) - float(started)) * 1000.0
+                                if started is not None and finished is not None
+                                else None,
+                                decimals=3,
+                            ),
+                        ]
 
                 row += CSVExporter._valve_row_values(valve_states, i, len(valve_header))
                 row += [

@@ -294,6 +294,25 @@ def save_program_favorites(favorites: list[str | None], path: str = DEFAULT_PREF
     return _atomic_save_json(data, path)
 
 
+def load_export_read_timing_enabled(default: bool = False, path: str = DEFAULT_PREFS_PATH) -> bool:
+    """Return whether CSV exports should include detailed per-read timing metadata."""
+    data = _load_json(path)
+    export_settings = data.get("export", {})
+    if not isinstance(export_settings, dict):
+        return bool(default)
+    return bool(export_settings.get("include_read_timing", default))
+
+
+def save_export_read_timing_enabled(enabled: bool, path: str = DEFAULT_PREFS_PATH) -> bool:
+    """Persist the optional CSV read-timing export setting."""
+    data = _load_json(path)
+    if "export" not in data or not isinstance(data.get("export"), dict):
+        data["export"] = {}
+    data["export"]["include_read_timing"] = bool(enabled)
+    data["export"]["ts"] = datetime.utcnow().isoformat() + "Z"
+    return _atomic_save_json(data, path)
+
+
 def list_system_serial_ports() -> list:
     """
     Return the available serial port names as strings.

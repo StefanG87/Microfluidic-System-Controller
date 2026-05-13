@@ -23,6 +23,8 @@ class ExportSnapshot:
     profile_name: str | None = None
     valve_coils: list | None = None
     extra_series: list | None = None
+    sample_finished_time_data: list | None = None
+    read_timing_data: list | None = None
 
     def with_metadata(self, offset=0.0, valve_names=None, profile_name=None, valve_coils=None):
         """Attach export metadata that lives outside the measurement buffers."""
@@ -62,6 +64,8 @@ class MeasurementSession:
         self.extra_series_units = {}
         self.abs_time_data = []
         self.rotary_active = []
+        self.sample_finished_time_data = []
+        self.read_timing_data = []
 
     def set_fluigent_channel_count(self, count):
         """Resize Fluigent buffers after sensor discovery, keeping existing values when possible."""
@@ -96,6 +100,8 @@ class MeasurementSession:
             values.clear()
         self.abs_time_data.clear()
         self.rotary_active.clear()
+        self.sample_finished_time_data.clear()
+        self.read_timing_data.clear()
 
     def begin_sample(self, abs_time, rel_time, target_pressure):
         """Record the shared timestamps and target pressure for one sample."""
@@ -152,6 +158,26 @@ class MeasurementSession:
         """Record the sampled rotary-valve active port for the current sample."""
         self.rotary_active.append(active_port)
 
+    def append_sample_timing(self, sample_finished_abs_time, read_timings):
+        """Record timing metadata for the current sample."""
+        self.sample_finished_time_data.append(sample_finished_abs_time)
+        self.read_timing_data.append([self._timing_to_dict(item) for item in (read_timings or [])])
+
+    @staticmethod
+    def _timing_to_dict(item):
+        """Convert timing dataclasses or dict-like values to plain dictionaries."""
+        if isinstance(item, dict):
+            return {
+                "channel": str(item.get("channel", "")),
+                "started_abs": item.get("started_abs"),
+                "finished_abs": item.get("finished_abs"),
+            }
+        return {
+            "channel": str(getattr(item, "channel", "")),
+            "started_abs": getattr(item, "started_abs", None),
+            "finished_abs": getattr(item, "finished_abs", None),
+        }
+
     def rollback_partial_sample(self):
         """Remove the data written before a failed pressure readout."""
         if self.time_data:
@@ -175,4 +201,6 @@ class MeasurementSession:
             start_timestamp=start_timestamp,
             rotary_active=list(self.rotary_active),
             extra_series=self.snapshot_extra_series(),
+            sample_finished_time_data=list(self.sample_finished_time_data),
+            read_timing_data=[[dict(item) for item in sample] for sample in self.read_timing_data],
         )
