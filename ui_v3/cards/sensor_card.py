@@ -11,15 +11,16 @@ from ui_v3.fluent_compat import CardWidget, CaptionLabel, add_info_header, make_
 class SensorCard(CardWidget):
     """Display the latest sampled values from pressure and cataloged sensors."""
 
-    def __init__(self, controller, parent=None):
+    def __init__(self, controller, parent=None, compact: bool = False):
         super().__init__(parent)
         self.controller = controller
+        self.compact = bool(compact)
         self._value_labels = {}
         self._title_labels = {}
         self._sensor_order = []
         self._sensor_units = {}
         self._current_column_count = 0
-        layout = make_card_layout(self)
+        layout = make_card_layout(self, compact=self.compact)
         add_info_header(
             layout,
             "Live Sensors",
@@ -33,8 +34,8 @@ class SensorCard(CardWidget):
         self.table = QWidget()
         self.grid = QGridLayout(self.table)
         self.grid.setContentsMargins(0, 0, 0, 0)
-        self.grid.setHorizontalSpacing(10)
-        self.grid.setVerticalSpacing(2)
+        self.grid.setHorizontalSpacing(8 if self.compact else 10)
+        self.grid.setVerticalSpacing(1 if self.compact else 2)
         layout.addWidget(self.table)
 
         self._rebuild_sensor_rows(controller.device_catalog.to_embedded_editor_info())

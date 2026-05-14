@@ -57,7 +57,7 @@ class RotaryCard(CardWidget):
         self._busy = False
         self._active_port = 0
 
-        layout = make_card_layout(self)
+        layout = make_card_layout(self, compact=not self.show_connection_controls)
         add_info_header(
             layout,
             "Rotary Valve",

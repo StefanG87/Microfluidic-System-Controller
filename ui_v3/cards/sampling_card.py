@@ -16,7 +16,7 @@ class SamplingCard(CardWidget):
         self.controller = controller
         self.show_interval = bool(show_interval)
         self.show_controls = bool(show_controls)
-        layout = make_card_layout(self)
+        layout = make_card_layout(self, compact=self.show_controls and not self.show_interval)
         if self.show_controls:
             add_info_header(
                 layout,

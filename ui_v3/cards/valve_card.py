@@ -12,19 +12,21 @@ from ui_v3.fluent_compat import CardWidget, CaptionLabel, PushButton, add_info_h
 class ValveCard(CardWidget):
     """Expose profile-defined valves as dynamic toggle buttons."""
 
-    def __init__(self, controller, parent=None, dashboard_mode: bool = False):
+    def __init__(self, controller, parent=None, dashboard_mode: bool = False, show_header: bool = True):
         super().__init__(parent)
         self.controller = controller
         self.dashboard_mode = bool(dashboard_mode)
+        self.show_header = bool(show_header)
         self._buttons = {}
         self._groups = []
-        layout = make_card_layout(self)
-        add_info_header(
-            layout,
-            "Valves",
-            "Toggles profile-defined Modbus valve coils. Active valves are highlighted with the shared v3 accent color. "
-            "Close All Valves closes every configured valve without changing pressure.",
-        )
+        layout = make_card_layout(self, compact=self.dashboard_mode)
+        if self.show_header:
+            add_info_header(
+                layout,
+                "Valves",
+                "Toggles profile-defined Modbus valve coils. Active valves are highlighted with the shared v3 accent color. "
+                "Close All Valves closes every configured valve without changing pressure.",
+            )
 
         self.button_area = QWidget()
         self.group_layout = QVBoxLayout(self.button_area)

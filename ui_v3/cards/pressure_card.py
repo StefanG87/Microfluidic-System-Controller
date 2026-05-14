@@ -24,7 +24,7 @@ class PressureCard(CardWidget):
         self._measured_text = "-- mbar"
         self._corrected_text = "-- mbar"
         self._target_text = "0.00 mbar"
-        layout = make_card_layout(self)
+        layout = make_card_layout(self, compact=self.compact_status)
         add_info_header(
             layout,
             "Pressure Control",

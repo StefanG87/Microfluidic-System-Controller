@@ -116,11 +116,13 @@ def fluent_icon(name: str) -> QIcon:
     return getattr(FIF, name, QIcon())
 
 
-def make_card_layout(card: QWidget) -> QVBoxLayout:
-    """Create the standard 8px-grid layout used by v3 cards."""
+def make_card_layout(card: QWidget, compact: bool = False) -> QVBoxLayout:
+    """Create the standard card layout used by v3 cards."""
     layout = QVBoxLayout(card)
-    layout.setContentsMargins(10, 10, 10, 10)
-    layout.setSpacing(5)
+    margin = 6 if compact else 10
+    spacing = 3 if compact else 5
+    layout.setContentsMargins(margin, margin, margin, margin)
+    layout.setSpacing(spacing)
     return layout
 
 

@@ -26,7 +26,7 @@ class ProgramCard(CardWidget):
         self.favorite_labels = []
         self.favorite_select_buttons = []
         self.favorite_run_buttons = []
-        layout = make_card_layout(self)
+        layout = make_card_layout(self, compact=self.compact)
         add_info_header(
             layout,
             "Program Control" if self.compact else "Program Runner",
@@ -95,14 +95,14 @@ class ProgramCard(CardWidget):
         row = QWidget()
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(4 if self.compact else 8)
 
-        label = QLabel(f"Favorite {index + 1}: no file")
+        label = QLabel(f"Slot {index + 1}: no file" if self.compact else f"Favorite {index + 1}: no file")
         label.setStyleSheet("color: #60717d;")
         select_button = PushButton("...")
         run_button = PushButton("Run")
-        select_button.setFixedWidth(48)
-        run_button.setFixedWidth(64)
+        select_button.setFixedWidth(38 if self.compact else 48)
+        run_button.setFixedWidth(52 if self.compact else 64)
 
         select_button.clicked.connect(lambda _checked=False, slot=index: self._select_favorite(slot))
         run_button.clicked.connect(lambda _checked=False, slot=index: self._run_favorite(slot))
@@ -136,7 +136,7 @@ class ProgramCard(CardWidget):
         path = self.favorite_paths[index]
         if not path or not os.path.isfile(path):
             self.favorite_paths[index] = None
-            self.favorite_labels[index].setText(f"Favorite {index + 1}: no file")
+            self.favorite_labels[index].setText(f"Slot {index + 1}: no file" if self.compact else f"Favorite {index + 1}: no file")
             self.favorite_labels[index].setStyleSheet("color: #60717d;")
             self._save_favorites()
             self.controller.append_log("[v3] Favorite program file not found.")
@@ -186,7 +186,7 @@ class ProgramCard(CardWidget):
                 self.favorite_labels[index].setText(self._display_path(path))
                 self.favorite_labels[index].setStyleSheet("color: #18202b;")
             else:
-                self.favorite_labels[index].setText(f"Favorite {index + 1}: no file")
+                self.favorite_labels[index].setText(f"Slot {index + 1}: no file" if self.compact else f"Favorite {index + 1}: no file")
                 self.favorite_labels[index].setStyleSheet("color: #60717d;")
 
     def _save_favorites(self) -> None:
