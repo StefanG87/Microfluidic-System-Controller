@@ -20,11 +20,14 @@ class V3PlotPanelTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        self.load_settings_patch = patch("ui_v3.plot_panel.load_plot_settings", return_value={})
+        self.load_settings_patch.start()
         self.panel = PlotPanel()
 
     def tearDown(self):
         self.panel.close()
         self.panel.deleteLater()
+        self.load_settings_patch.stop()
 
     def test_log_y_limits_ignore_nonpositive_values(self):
         if self.panel._axis is None:
@@ -93,6 +96,23 @@ class V3PlotPanelTests(unittest.TestCase):
             for text in legend.get_texts()
         ]
         self.assertIn("Corrected", legend_labels)
+
+    def test_axis_scale_settings_apply_and_persist(self):
+        if self.panel._axis is None:
+            self.skipTest("Matplotlib Qt canvas is not available")
+
+        with patch("ui_v3.plot_panel.save_plot_settings", return_value=True) as save_mock:
+            self.panel.set_axis_scale("pressure", "log")
+            self.panel.set_axis_scale("flow", "log")
+            self.panel.set_axis_scale("time", "log")
+
+        self.assertEqual(self.panel.axis_scale("pressure"), "log")
+        self.assertEqual(self.panel.axis_scale("flow"), "log")
+        self.assertEqual(self.panel.axis_scale("time"), "log")
+        self.assertEqual(self.panel._axis.get_yscale(), "log")
+        self.assertEqual(self.panel._flow_axis.get_yscale(), "log")
+        self.assertEqual(self.panel._axis.get_xscale(), "log")
+        self.assertTrue(save_mock.called)
 
     def _checked_labels(self) -> list[str]:
         """Return checked plot-channel labels in display order."""

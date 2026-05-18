@@ -166,6 +166,27 @@ class PlotPanel(QWidget):
             return QLabel("Plot channel controls are unavailable.")
         return self._checkbox_holder
 
+    def axis_scale(self, axis_key: str) -> str:
+        """Return the configured linear/log scale for a selectable plot axis."""
+        return self._axis_scale_settings().get(str(axis_key).strip().lower(), "linear")
+
+    def set_axis_scale(self, axis_key: str, scale: str) -> None:
+        """Set a selectable axis scale from the Plot Settings page."""
+        key = str(axis_key or "").strip().lower()
+        selected_scale = str(scale or "").strip().lower()
+        if key not in {"time", "pressure", "flow"} or selected_scale not in {"linear", "log"}:
+            return
+
+        scales = self._axis_scale_settings()
+        if scales.get(key) == selected_scale:
+            return
+        scales[key] = selected_scale
+        self._plot_settings["axis_scales"] = scales
+        self._manual_view_limits = None
+        self._apply_axis_scale_settings()
+        self._save_plot_preferences()
+        self.update_plot()
+
     def apply_channel_preset(self, preset: str) -> None:
         """Apply a saved-channel preset from the Plot Settings page."""
         preset_key = str(preset or "").strip().lower()
@@ -380,8 +401,51 @@ class PlotPanel(QWidget):
                 for label, checkbox in self.checkboxes.items()
             },
             "lock_view": self._is_lock_view_enabled(),
+            "axis_scales": self._axis_scale_settings(),
         }
         save_plot_settings(self._plot_settings)
+
+    def _axis_scale_settings(self) -> dict:
+        """Return sanitized axis scale settings for the plot."""
+        raw = self._plot_settings.get("axis_scales", {})
+        raw = raw if isinstance(raw, dict) else {}
+        scales = {"time": "linear", "pressure": "linear", "flow": "linear"}
+        for key in scales:
+            value = str(raw.get(key, "linear")).strip().lower()
+            if value in {"linear", "log"}:
+                scales[key] = value
+        return scales
+
+    def _apply_axis_scale_settings(self) -> None:
+        """Apply configured linear/log scales to the active axes."""
+        if self._axis is None:
+            return
+        scales = self._axis_scale_settings()
+        time_scale = scales["time"]
+        for axis in (self._axis, self._flow_axis, self._valve_axis):
+            if axis is not None:
+                axis.set_xscale(time_scale)
+        self._axis.set_yscale(scales["pressure"])
+        if self._flow_axis is not None:
+            self._flow_axis.set_yscale(scales["flow"])
+        if self._valve_axis is not None:
+            self._valve_axis.set_yscale("linear")
+        self._ensure_valid_scale_limits()
+
+    def _ensure_valid_scale_limits(self) -> None:
+        """Keep log-scaled axes away from zero before data arrives."""
+        if self._axis is None:
+            return
+        axes = (self._axis, self._flow_axis, self._valve_axis)
+        if self._axis.get_xscale() == "log":
+            for axis in axes:
+                if axis is not None:
+                    x_min, x_max = axis.get_xlim()
+                    axis.set_xlim(max(x_min, 1e-3), max(x_max, 10.0))
+        for axis in axes:
+            if axis is not None and axis.get_yscale() == "log":
+                y_min, y_max = axis.get_ylim()
+                axis.set_ylim(max(y_min, 1e-9), max(y_max, max(y_min, 1e-9) * 10.0))
 
     def _is_lock_view_enabled(self) -> bool:
         """Return True when live redraws should preserve manual zoom limits."""
@@ -410,6 +474,7 @@ class PlotPanel(QWidget):
         self._target_line = None
         self._corrected_line = None
         self._measured_line = None
+        self._apply_axis_scale_settings()
         if draw:
             self._draw()
 
@@ -820,7 +885,7 @@ class PlotPanel(QWidget):
         return scales
 
     def _restore_axis_scales(self, scales) -> None:
-        """Restore axis scale modes selected through the Matplotlib toolbar."""
+        """Restore axis scale modes selected through settings or the Matplotlib toolbar."""
         if not scales or self._axis is None:
             return
         for key, axis in (

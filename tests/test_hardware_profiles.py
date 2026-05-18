@@ -41,7 +41,7 @@ class HardwareProfileTests(unittest.TestCase):
 
         self.assertEqual(meta["group"], "pneumatic")
         self.assertEqual(meta["editor_name"], "Pneumatic 1")
-        self.assertEqual(meta["button_label"], "Outlet 1")
+        self.assertEqual(meta["button_label"], "Valve 1")
         self.assertEqual(meta["coil"], 0)
         self.assertEqual(meta["box"], "Pneumatic Valves")
 

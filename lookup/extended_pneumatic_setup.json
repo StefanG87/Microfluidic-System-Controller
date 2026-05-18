@@ -11,73 +11,73 @@
           "group": "pneumatic",
           "coil": 0,
           "editor_name": "Pneumatic 1",
-          "button_label": "Outlet 1"
+          "button_label": "Valve 1"
         },
         {
           "group": "pneumatic",
           "coil": 1,
           "editor_name": "Pneumatic 2",
-          "button_label": "Outlet 2"
+          "button_label": "Valve 2"
         },
         {
           "group": "pneumatic",
           "coil": 2,
           "editor_name": "Pneumatic 3",
-          "button_label": "Outlet 3"
+          "button_label": "Valve 3"
         },
         {
           "group": "pneumatic",
           "coil": 3,
           "editor_name": "Pneumatic 4",
-          "button_label": "Outlet 4"
+          "button_label": "Valve 4"
         },
         {
           "group": "pneumatic",
           "coil": 12,
           "editor_name": "Pneumatic 5",
-          "button_label": "Outlet 5"
+          "button_label": "Valve 5"
         },
         {
           "group": "pneumatic",
           "coil": 13,
           "editor_name": "Pneumatic 6",
-          "button_label": "Outlet 6"
+          "button_label": "Valve 6"
         },
         {
           "group": "pneumatic",
           "coil": 14,
           "editor_name": "Pneumatic 7",
-          "button_label": "Outlet 7"
+          "button_label": "Valve 7"
         },
         {
           "group": "pneumatic",
           "coil": 15,
           "editor_name": "Pneumatic 8",
-          "button_label": "Outlet 8"
+          "button_label": "Valve 8"
         },
         {
           "group": "pneumatic",
           "coil": 8,
           "editor_name": "Pneumatic 9",
-          "button_label": "Outlet 9"
+          "button_label": "Valve 9"
         },
         {
           "group": "pneumatic",
           "coil": 9,
           "editor_name": "Pneumatic 10",
-          "button_label": "Outlet 10"
+          "button_label": "Valve 10"
         },
         {
           "group": "pneumatic",
           "coil": 10,
           "editor_name": "Pneumatic 11",
-          "button_label": "Outlet 11"
+          "button_label": "Valve 11"
         },
         {
           "group": "pneumatic",
           "coil": 11,
           "editor_name": "Pneumatic 12",
-          "button_label": "Outlet 12"
+          "button_label": "Valve 12"
         }
       ]
     },

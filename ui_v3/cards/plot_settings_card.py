@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from ui_v3.fluent_compat import CardWidget, PushButton, add_info_header, make_card_layout, stretch_row
+from PySide6.QtWidgets import QComboBox, QHBoxLayout, QWidget
+
+from ui_v3.fluent_compat import BodyLabel, CardWidget, PushButton, add_info_header, make_card_layout, stretch_row
 
 
 class PlotSettingsCard(CardWidget):
@@ -34,4 +36,33 @@ class PlotSettingsCard(CardWidget):
 
         layout.addWidget(stretch_row(pressure_button, sensors_button))
         layout.addWidget(stretch_row(all_button, clear_button))
+        layout.addWidget(BodyLabel("Axis Scaling"))
+        layout.addWidget(self._scale_row(plot_panel, "Time axis", "time"))
+        layout.addWidget(self._scale_row(plot_panel, "Pressure axis", "pressure"))
+        layout.addWidget(self._scale_row(plot_panel, "Flow / sensor axis", "flow"))
         layout.addWidget(plot_panel.plot_settings_widget())
+
+    @staticmethod
+    def _scale_row(plot_panel, title: str, axis_key: str) -> QWidget:
+        """Create one linear/log axis-scale selector row."""
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        label = BodyLabel(title)
+        combo = QComboBox()
+        combo.addItem("Linear", "linear")
+        combo.addItem("Log", "log")
+        current = plot_panel.axis_scale(axis_key)
+        combo.setCurrentIndex(max(0, combo.findData(current)))
+        combo.setToolTip(
+            "Log scale only displays positive values. Zero or negative samples are ignored by Matplotlib on that axis."
+        )
+        combo.currentIndexChanged.connect(
+            lambda _index, key=axis_key, box=combo: plot_panel.set_axis_scale(key, str(box.currentData()))
+        )
+
+        layout.addWidget(label, 1)
+        layout.addWidget(combo)
+        return row
