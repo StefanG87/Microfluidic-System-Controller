@@ -65,6 +65,7 @@ class PlotPanel(QWidget):
         self._loading_plot_settings = False
         self._manual_view_limits = None
         self._toolbar = None
+        self._legend = None
         self._layout_warning_logged = False
         self._plot_update_timer = QTimer(self)
         self._plot_update_timer.setSingleShot(True)
@@ -102,7 +103,7 @@ class PlotPanel(QWidget):
         self._axis = self._figure.add_subplot(111)
         self._flow_axis = self._axis.twinx()
         self._valve_axis = self._axis.twinx()
-        self._figure.subplots_adjust(left=0.10, right=0.76, top=0.86, bottom=0.12)
+        self._figure.subplots_adjust(left=0.10, right=0.76, top=0.78, bottom=0.12)
         self._canvas = FigureCanvasQTAgg(self._figure)
         self._canvas.setMinimumHeight(420)
 
@@ -848,7 +849,7 @@ class PlotPanel(QWidget):
         if self._canvas is None:
             return
         try:
-            self._figure.tight_layout(rect=(0.02, 0.02, 0.88, 0.92))
+            self._figure.tight_layout(rect=(0.02, 0.02, 0.88, 0.84))
         except Exception as exc:
             if not self._layout_warning_logged and self.log is not None:
                 self.log.append(f"[v3] Plot layout warning: {exc}")
@@ -862,17 +863,21 @@ class PlotPanel(QWidget):
             valve_handles, valve_labels = self._valve_axis.get_legend_handles_labels()
             handles.extend(valve_handles)
             labels.extend(valve_labels)
+        if self._figure is not None:
+            for old_legend in list(self._figure.legends):
+                old_legend.remove()
         if handles:
-            legend = self._axis.legend(
+            # Figure-level legends are not clipped by the plot axes or the extra right axes.
+            self._legend = self._figure.legend(
                 handles,
                 labels,
                 loc="upper center",
-                bbox_to_anchor=(0.5, 1.20),
-                ncol=min(len(labels), 6),
+                bbox_to_anchor=(0.5, 0.98),
+                ncol=max(1, min(len(labels), 6)),
                 fontsize="small",
                 frameon=False,
             )
-            for text in legend.get_texts():
+            for text in self._legend.get_texts():
                 text.set_color("#26333d")
         self._canvas.draw_idle()
         self._canvas.update()
