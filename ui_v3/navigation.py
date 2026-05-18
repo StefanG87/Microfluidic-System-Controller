@@ -27,6 +27,7 @@ NAV_ITEMS = (
     NavigationItem("valves", "Valves", "TECHNICAL_VALVE"),
     NavigationItem("program", "Programs", "PLAY"),
     NavigationItem("plot_settings", "Plot Settings", "TECHNICAL_PLOT"),
+    NavigationItem("calibration", "Calibration", "TECHNICAL_CALIBRATION"),
     NavigationItem("settings", "Settings", "SETTING"),
 )
 
@@ -76,6 +77,29 @@ def technical_plot_icon() -> QIcon:
     return QIcon(pixmap)
 
 
+def technical_calibration_icon() -> QIcon:
+    """Draw a compact balance/calibration icon."""
+    pixmap = QPixmap(32, 32)
+    pixmap.fill(QColor(0, 0, 0, 0))
+
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    pen = QPen(QColor("#18202b"), 2.0)
+    painter.setPen(pen)
+    painter.setBrush(QColor("#f8fbfc"))
+
+    painter.drawLine(16, 6, 16, 23)
+    painter.drawLine(8, 12, 24, 12)
+    painter.drawLine(11, 12, 7, 20)
+    painter.drawLine(21, 12, 25, 20)
+    painter.drawArc(4, 18, 8, 6, 180 * 16, 180 * 16)
+    painter.drawArc(20, 18, 8, 6, 180 * 16, 180 * 16)
+    painter.drawLine(10, 26, 22, 26)
+    painter.end()
+
+    return QIcon(pixmap)
+
+
 class NavigationSidebar(QWidget):
     """Icon rail with tooltips; keeps the main cockpit width close to v2."""
 
@@ -96,6 +120,8 @@ class NavigationSidebar(QWidget):
                 icon = technical_valve_icon()
             elif item.icon == "TECHNICAL_PLOT":
                 icon = technical_plot_icon()
+            elif item.icon == "TECHNICAL_CALIBRATION":
+                icon = technical_calibration_icon()
             else:
                 icon = fluent_icon(item.icon)
             button.setIcon(icon)

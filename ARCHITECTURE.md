@@ -23,9 +23,10 @@ The v3 GUI is a parallel modernization track, not a replacement for the lab GUI 
 Current v3 structure:
 
 - `ui_v3/main_window.py`: PySide6 main window with navigation, control-panel stack, plot panel, and status strip.
-- `ui_v3/navigation.py`: Fluent navigation route definitions for Dashboard, Pressure Control, Valves, Program Runner, and Settings.
+- `ui_v3/navigation.py`: Fluent navigation route definitions for Dashboard, Pressure Control, Valves, Program Runner, Plot Settings, Calibration, and Settings.
 - `ui_v3/control_panel.py`: page stack that composes reusable cards.
-- `ui_v3/cards/`: thin UI cards for hardware connection, pressure, valves, rotary control, sampling, export, program execution, sensors, and settings.
+- `ui_v3/cards/`: thin UI cards for hardware connection, pressure, valves, rotary control, balance connection, sampling, export, program execution, sensors, and settings.
+- `ui_v3/calibration_tab.py`: native PySide6 page for EtOH flow-by-mass calibration built on the GUI-independent calibration core.
 - `ui_v3/plot_panel.py`: Qt6 Matplotlib canvas using `backend_qtagg`.
 - `ui_v3/status_bar.py`: connection, measurement, program, profile, and interval status.
 - `ui_v3/controllers/runtime_controller.py`: Qt6-facing controller facade around existing runtime modules.
@@ -61,9 +62,11 @@ Important v3 constraints:
 - `modules/valve.py`: coil-driven valve abstraction.
 - `modules/flow_sensor.py`: analog flow sensor conversion and readout.
 - `modules/fluigent_wrapper.py`: Fluigent SDK loading, sensor detection, readout, and software zeroing.
+- `modules/balance.py`: Ohaus-compatible serial balance adapter plus PuTTY/Ohaus log parsing and gravimetric flow helpers.
 - `modules/rotary_valve_controller.py`: high-level rotary valve controller.
 - `modules/rotary_valve_widget.py`: rotary valve GUI, polling, and program-runner helper methods.
 - `modules/rvm_dt.py`: low-level AMF RVM DT serial protocol helper.
+- `modules/medium_calibration_core/`: GUI-independent EtOH calibration models, density lookup, measurement runner, analysis, and JSON export.
 - `modules/mf_common.py`: shared preferences, resource/output paths, hardware profile loading, small UI helpers, and persistence helpers.
 
 ### Hardware Profiles
@@ -72,9 +75,9 @@ Hardware profiles live in `lookup/` and define valve ownership, labels, editor n
 
 Tracked profiles currently include:
 
-- `stand1.json`: classic 4 pneumatic + 4 fluidic setup.
+- `stand1.json`: full stand 1 setup with 12 pneumatic valves and 4 fluidic valves.
 - `stand2.json`: alternate placeholder setup.
-- `extended_pneumatic_setup.json`: 12-outlet pneumatic setup measured on the lab controller. Its Modbus mapping is Outlet 1-4 -> coils 0-3, Outlet 5-8 -> coils 12-15, and Outlet 9-12 -> coils 8-11.
+- `extended_pneumatic_setup.json`: hidden compatibility profile retained for old local setups. The measured stand 1 pneumatic Modbus mapping is Valve 1-4 -> coils 0-3, Valve 5-8 -> coils 12-15, and Valve 9-12 -> coils 8-11.
 
 ### Automation And Editor
 
@@ -126,6 +129,8 @@ Important boundaries now in place:
 - Runtime device references are grouped in `RuntimeDeviceRegistry`, which rebuilds `DeviceCatalog` descriptors before the GUI publishes names to editor dialogs. Existing hardware modules expose catalog descriptors through this central layer instead of duplicating device metadata in the GUI.
 - The v3 GUI uses `V3RuntimeController` as a controller facade around `RuntimeDeviceRegistry`, `MeasurementSampler`, `MeasurementSession`, `ProgramRunner`, and `CSVExporter`.
 - Optional runtime adapters can publish generic sampled channels through `RuntimeDeviceRegistry.add_measurement_channel()`. `MeasurementSampler` records these channels into `MeasurementSession.extra_series` so CSV export includes them automatically.
+- The optional v3 balance uses this extension path: `Balance [g]` is a `weight` measurement channel backed by `modules.balance.SerialBalance`, and the SOP-relevant serial settings stay in the adapter instead of the GUI.
+- EtOH flow-by-mass calibration is split into a GUI-independent core (`modules/medium_calibration_core`) and a v3 PySide6 page (`ui_v3/calibration_tab.py`). The page receives runtime hardware through a context object, so the calibration runner can use existing pressure, valve, flow, pressure-sensor, offset, and balance adapters without importing GUI internals.
 - v3 profile changes go through `V3RuntimeController.set_hardware_profile()`. The method blocks changes while measuring or running a program, closes currently mapped valves before rebuilding connected valve objects, then republishes the device catalog.
 - Program-facing sensor reads go through `RuntimeDeviceRegistry`, while `PressureFlowGUI` keeps compatibility wrapper methods for existing runner calls.
 - Program-facing valve commands go through `RuntimeDeviceRegistry`, while GUI wrapper methods keep the existing `ProgramRunner` interface stable.
@@ -160,7 +165,7 @@ Recommended sequence:
 5. Add editor/program-contract constants only when the device needs automation steps.
 6. Keep GUI widgets as thin controls around the adapter; avoid embedding protocol logic in `gui_window.py`.
 
-For example, a balance should become a sensor adapter plus a `weight` catalog entry managed by `RuntimeDeviceRegistry`. Once it produces live values, register it through `RuntimeDeviceRegistry.add_measurement_channel(name="Weight", unit="g", kind=SENSOR_KIND_WEIGHT, read_value=adapter.read_weight_g)` so `MeasurementSampler` records a stable `Weight [g]` CSV column. A syringe pump should become an actuator adapter plus a `syringe_pump` catalog entry before it gets editor tasks; if it also produces telemetry, expose that telemetry as generic measurement channels.
+For example, the balance is now implemented as a sensor adapter plus a `weight` catalog entry managed by `RuntimeDeviceRegistry`. It is registered as `Balance [g]` so `MeasurementSampler` records a stable CSV column. A syringe pump should become an actuator adapter plus a `syringe_pump` catalog entry before it gets editor tasks; if it also produces telemetry, expose that telemetry as generic measurement channels.
 
 ## Hardware Safety Notes
 

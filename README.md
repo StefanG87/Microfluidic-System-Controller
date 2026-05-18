@@ -12,6 +12,8 @@ The controller GUI connects to laboratory hardware over Modbus TCP and serial in
 - switch pneumatic and fluidic valves
 - read analog flow sensors and Fluigent pressure sensors
 - control an AMF rotary valve
+- connect an optional Ohaus-compatible serial balance as a live measurement channel
+- run EtOH flow-by-mass calibration workflows
 - display live plots for pressure, flow, valves, Fluigent sensors, and rotary valve activity
 - export measurements to CSV
 - execute JSON-defined automation programs from the integrated program editor
@@ -32,7 +34,7 @@ available while the modern interface reaches functional parity.
 ## Project Structure
 
 - `modules/`: runtime package for GUI, hardware interfaces, plotting, export, pressure profiles, and program execution.
-- `ui_v3/`: parallel PySide6/Fluent interface with navigation, control cards, Qt6 plot panel, controller facades, and a JSON-compatible editor shell.
+- `ui_v3/`: parallel PySide6/Fluent interface with navigation, control cards, Qt6 plot panel, controller facades, calibration page, and a JSON-compatible editor shell.
 - `editor/`: standalone and embedded program editor package.
 - `lookup/`: tracked hardware profiles plus ignored local preference data.
 - `icons/` and `editor/icons/`: GUI icon assets.
@@ -45,6 +47,8 @@ available while the modern interface reaches functional parity.
 - `modules/gui_window.py` is still the main orchestration point for UI, hardware lifecycle, buffering, export, and automation startup.
 - `modules/measurement_session.py` owns live measurement buffers, generic extra measurement series, and CSV export snapshots.
 - `modules/device_catalog.py` is the preferred place to publish editor-visible runtime devices, display names, units, and profile-derived valve metadata when new hardware modules are added; existing pressure, flow, Fluigent, valve, and rotary devices use the same descriptor pattern.
+- `modules/balance.py` contains the Ohaus-compatible serial balance adapter and PuTTY/Ohaus log parsing helpers. In v3 it is exposed as a generic `Balance [g]` measurement channel so CSV export can include mass data.
+- `modules/medium_calibration_core/` contains GUI-independent EtOH flow-by-mass calibration logic. The v3 PySide6 page in `ui_v3/calibration_tab.py` uses this core without importing PyQt5 widgets.
 - `lookup/stand1.json` defines the full stand 1 valve setup: 12 pneumatic valves and 4 fluidic valves. The measured Modbus coil order is Valve 1-4 -> coils 0-3, Valve 5-8 -> coils 12-15, and Valve 9-12 -> coils 8-11. `lookup/extended_pneumatic_setup.json` is kept as a hidden compatibility profile.
 - The main GUI `Update Config` button refreshes detected sensors and editor device lists when no measurement or program is active.
 - `modules/program_contract.py` defines the shared editor/runner step names and parameter keys.
@@ -170,7 +174,7 @@ Recommended workflow:
 - Keep editor parameters and runtime behavior aligned through `program_contract.py`.
 - Register new sensors and actuators through `DeviceCatalog` descriptor helpers before wiring them into editor tasks, plotting, or CSV export.
 - Keep device display names and measurement units in `DeviceCatalog` constants/helpers instead of duplicating strings across GUI and editor modules.
-- For future time-series devices such as a balance, register a named extra series in `MeasurementSession` so the CSV exporter can add one stable column per device signal.
+- For future time-series devices, follow the balance pattern: register a named extra series in `MeasurementSession` through `RuntimeDeviceRegistry` so the CSV exporter can add one stable column per device signal.
 - Keep advanced pressure-profile behavior documented when `PolynomialPressure` changes.
 - Reduce broad `try/except` blocks where clearer logging can preserve stability without hiding root causes.
 - Further separate GUI orchestration from hardware and automation helpers only in small, low-risk steps.

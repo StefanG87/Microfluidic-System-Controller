@@ -11,7 +11,9 @@ import os
 from PySide6.QtCore import QObject, QThread, QTimer, Qt, Signal
 
 from editor.modules.editor.task_globals import update_available_sensors, update_available_valves
+from modules.balance import SerialBalance
 from modules.csv_exporter import CSVExporter
+from modules.device_catalog import SENSOR_KIND_WEIGHT, UNIT_WEIGHT_G, valve_meta_from_profile_item
 from modules.flow_sensor import SensirionFlowSensor
 from modules.fluigent_wrapper import detect_fluigent_sensors
 from modules.measurement_sampler import MeasurementSampler
@@ -33,9 +35,8 @@ from modules.mf_common import (
 )
 from modules.pressure_controller import PressureController
 from modules.program_runner import ProgramRunner
-from modules.runtime_devices import RuntimeDeviceRegistry
+from modules.runtime_devices import RuntimeDeviceRegistry, RuntimeMeasurementChannel
 from modules.valve import Valve
-from modules.device_catalog import valve_meta_from_profile_item
 from ui_v3.controllers.program_worker import V3ProgramWorker
 from ui_v3.controllers.timebase import V3Timebase
 
@@ -68,6 +69,9 @@ class V3RuntimeController(QObject):
         self.fluigent_sensors = []
         self.valves = []
         self._valve_meta = []
+        self.balance_reader = None
+        self.balance_port = load_last_comport("balance") or ""
+        self.balance_live_mass_g = None
         self.hw_profile = {"name": "not connected", "valve_groups": []}
         self.hw_profile_source = load_hw_profile_from_prefs(default="stand1")
 
@@ -180,6 +184,11 @@ class V3RuntimeController(QObject):
                     pass
         except Exception as exc:
             self.append_log(f"[v3] Program stop during shutdown failed: {exc}")
+
+        try:
+            self.disconnect_balance()
+        except Exception as exc:
+            self.append_log(f"[v3] Balance shutdown failed: {exc}")
 
         try:
             self.disconnect_hardware()
@@ -341,6 +350,9 @@ class V3RuntimeController(QObject):
             "offset": self.offset,
             "valve_names": self.device_catalog.valve_names(),
             "valve_states": valve_states,
+            "balance_connected": self.balance_reader is not None,
+            "balance_port": self.balance_port,
+            "balance_mass_g": self.balance_live_mass_g,
         }
         self.status_changed.emit(dict(self._last_status))
 
@@ -436,6 +448,76 @@ class V3RuntimeController(QObject):
         self.sample_ready.emit(sample)
         self._emit_status()
         return sample
+
+    def connect_balance(self, port: str) -> bool:
+        """Connect an Ohaus-compatible serial balance and expose it as a sampled channel."""
+        clean_port = str(port or "").strip()
+        if not clean_port:
+            self.append_log("[v3] Balance COM port is empty.")
+            self._emit_status()
+            return False
+        self.disconnect_balance(publish=False)
+        try:
+            self.balance_reader = SerialBalance(clean_port)
+            self.balance_port = clean_port
+            save_last_comport(clean_port, device_key="balance")
+            self._rebuild_optional_measurement_channels()
+            self.append_log(f"[v3] Balance connected on {clean_port}")
+            self._emit_status()
+            return True
+        except Exception as exc:
+            self.balance_reader = None
+            self.append_log(f"[v3] Balance connection failed: {exc}")
+            self._rebuild_optional_measurement_channels()
+            self._emit_status()
+            return False
+
+    def disconnect_balance(self, publish: bool = True) -> None:
+        """Disconnect the optional serial balance without touching other hardware."""
+        reader = self.balance_reader
+        self.balance_reader = None
+        self.balance_live_mass_g = None
+        if reader is not None:
+            try:
+                reader.close()
+            except Exception as exc:
+                self.append_log(f"[v3] Balance close failed: {exc}")
+        self._rebuild_optional_measurement_channels()
+        if publish:
+            self.append_log("[v3] Balance disconnected.")
+            self._emit_status()
+
+    def read_balance_mass_g(self, timeout_s: float = 0.05):
+        """Read the latest balance mass for live display and CSV export."""
+        if self.balance_reader is None:
+            return None
+        try:
+            mass = self.balance_reader.read_mass_g(timeout_s=timeout_s)
+            self.balance_live_mass_g = float(mass)
+            return self.balance_live_mass_g
+        except TimeoutError:
+            return self.balance_live_mass_g
+
+    def _rebuild_optional_measurement_channels(self) -> None:
+        """Publish optional hardware modules as generic sampled channels."""
+        channels = []
+        if self.balance_reader is not None:
+            channels.append(
+                RuntimeMeasurementChannel(
+                    name="Balance",
+                    unit=UNIT_WEIGHT_G,
+                    read_value=lambda: self.read_balance_mass_g(timeout_s=0.05),
+                    kind=SENSOR_KIND_WEIGHT,
+                    source="serial",
+                    metadata={
+                        "port": self.balance_port,
+                        "baudrate": getattr(self.balance_reader, "baudrate", None),
+                    },
+                )
+            )
+        self.runtime_devices.set_measurement_channels(channels)
+        self.runtime_devices.register_measurement_channels()
+        self._publish_device_catalog()
 
     def set_target_pressure_mbar(self, value_mbar):
         """Set user-facing pressure target and send offset-corrected hardware command."""

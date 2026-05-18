@@ -5,6 +5,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import QFrame, QScrollArea, QStackedWidget, QVBoxLayout, QWidget
 
 from ui_v3.cards import (
+    BalanceConnectionCard,
     ExportCard,
     HardwareCard,
     PlotSettingsCard,
@@ -17,6 +18,7 @@ from ui_v3.cards import (
     SettingsCard,
     ValveCard,
 )
+from ui_v3.calibration_tab import MediumCalibrationTab, hardware_context_from_controller
 from ui_v3.fluent_compat import SubtitleLabel
 
 
@@ -29,6 +31,7 @@ class ControlPanel(QStackedWidget):
         self.plot_panel = plot_panel
         self._routes = {}
         self._build_pages()
+        self.controller.device_catalog_changed.connect(self._sync_calibration_hardware)
 
     def set_route(self, route: str) -> None:
         """Switch to a route if it exists."""
@@ -66,12 +69,18 @@ class ControlPanel(QStackedWidget):
         self._add_page("program", "Program Runner", [ProgramCard(self.controller)])
         if self.plot_panel is not None:
             self._add_page("plot_settings", "Plot Settings", [PlotSettingsCard(self.plot_panel)], scroll=True)
+        self._calibration_tab = MediumCalibrationTab(
+            hardware=hardware_context_from_controller(self.controller),
+            hardware_provider=lambda: hardware_context_from_controller(self.controller),
+        )
+        self._add_page("calibration", "Calibration", [self._calibration_tab], scroll=False)
         self._add_page(
             "settings",
             "Settings",
             [
                 HardwareCard(self.controller),
                 RotaryConnectionCard(self.controller),
+                BalanceConnectionCard(self.controller),
                 SettingsCard(self.controller, show_profile=True, show_pressure_offset=False),
                 SamplingCard(self.controller, show_controls=False),
                 ExportCard(self.controller),
@@ -79,6 +88,12 @@ class ControlPanel(QStackedWidget):
             ],
             scroll=True,
         )
+
+    def _sync_calibration_hardware(self, _catalog_info=None) -> None:
+        """Keep the calibration tab aligned with hardware/profile changes."""
+        tab = getattr(self, "_calibration_tab", None)
+        if tab is not None:
+            tab.set_hardware_context(hardware_context_from_controller(self.controller))
 
     def _add_page(
         self,

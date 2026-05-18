@@ -19,6 +19,8 @@ PyQt5 lab GUI.
 - The Dashboard is again focused on the lab cockpit workflow: pressure control, recording/export, live sensor values, valve switching, and rotary control in one view; sampling interval/export/hardware/offset settings live in Settings.
 - `stand1` now contains the complete stand 1 valve mapping. The Dashboard still shows only the compact routine valve subset, while the Valves page exposes the full configured valve set.
 - Rotary valve control is visible again in the main cockpit and uses the same controller layer as the classic PyQt5 widget, without importing PyQt5 into v3.
+- An optional Ohaus-compatible serial balance can be connected from Settings and is exposed as a generic live measurement channel named `Balance` so plotting and CSV export can include mass data.
+- A v3 Calibration page now embeds the GUI-independent EtOH flow-by-mass calibration core through native PySide6 widgets. It can use the current pressure controller, valves, flow sensors, pressure sensors, pressure offset, and connected balance.
 - Settings contains a v2-style pressure-offset calibration dialog for internal pressure or Fluigent reference sensors.
 - The v3 editor window now follows the old editor workflow more closely: task palette on the left, program step list and duplicate/update/remove controls on the right.
 - The v3 editor has native PySide6 parameter dialogs for standard tasks, special tasks, valve/sensor selection, rotary actions, CSV export, loops, dose volume, flow control, and PolynomialPressure parameters with live preview.
@@ -33,6 +35,8 @@ PyQt5 lab GUI.
 - Lab-test Fluigent zeroing and calibration program steps from v3-generated programs.
 - Add GUI-level safeguards while measurement or program execution is active.
 - Validate pressure, valves, Fluigent sensors, flow sensors, rotary valve, CSV export, and program abort/restart behavior on the lab setup.
+- Lab-test the Ohaus balance connection with the SOP settings: 9600 baud, 8N1, no flow control, unit g, and auto-print interval around 1 s.
+- Lab-test the Calibration page on a safe pressure range before using saved calibration JSON files for publications or final corrections.
 
 ## Design Direction
 
