@@ -7,6 +7,7 @@ It also implements the GUI-facing adapter methods expected by ProgramRunner.
 from __future__ import annotations
 
 import os
+import time
 
 from PySide6.QtCore import QObject, QThread, QTimer, Qt, Signal
 
@@ -98,6 +99,8 @@ class V3RuntimeController(QObject):
         self.rotary_adapter = None
         self.rotary_active_port = 0
         self._sample_failure_logged = False
+        self._last_periodic_status_emit = 0.0
+        self._periodic_status_interval_s = 1.0
         self._publish_device_catalog()
         self._emit_status()
 
@@ -446,8 +449,21 @@ class V3RuntimeController(QObject):
 
         self._sample_failure_logged = False
         self.sample_ready.emit(sample)
-        self._emit_status()
+        self._emit_periodic_sample_status()
         return sample
+
+    def _emit_periodic_sample_status(self) -> None:
+        """Throttle broad status updates during live sampling.
+
+        The actual sample is still emitted for plot, sensor cards, and CSV buffers.
+        Broad status snapshots update slower so the GUI does not steal timing budget
+        from the acquisition loop.
+        """
+        now = time.monotonic()
+        if now - self._last_periodic_status_emit < self._periodic_status_interval_s:
+            return
+        self._last_periodic_status_emit = now
+        self._emit_status()
 
     def connect_balance(self, port: str) -> bool:
         """Connect an Ohaus-compatible serial balance and expose it as a sampled channel."""

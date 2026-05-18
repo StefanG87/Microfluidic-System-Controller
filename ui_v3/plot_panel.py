@@ -12,6 +12,9 @@ from modules.mf_common import load_plot_settings, save_plot_settings
 from ui_v3.fluent_compat import CaptionLabel, PushButton, TextEdit, add_info_header
 
 
+PLOT_REDRAW_INTERVAL_MS = 500
+
+
 class PlotPanel(QWidget):
     """Large responsive plot surface for pressure and sensor traces."""
 
@@ -67,9 +70,10 @@ class PlotPanel(QWidget):
         self._toolbar = None
         self._legend = None
         self._layout_warning_logged = False
+        self._layout_dirty = True
         self._plot_update_timer = QTimer(self)
         self._plot_update_timer.setSingleShot(True)
-        self._plot_update_timer.setInterval(75)
+        self._plot_update_timer.setInterval(PLOT_REDRAW_INTERVAL_MS)
         self._plot_update_timer.timeout.connect(self.update_plot)
         self.lock_view_button = None
         self.autoscale_button = None
@@ -183,6 +187,7 @@ class PlotPanel(QWidget):
         scales[key] = selected_scale
         self._plot_settings["axis_scales"] = scales
         self._manual_view_limits = None
+        self._layout_dirty = True
         self._apply_axis_scale_settings()
         self._save_plot_preferences()
         self.update_plot()
@@ -213,6 +218,7 @@ class PlotPanel(QWidget):
                 checkbox.blockSignals(False)
         finally:
             self._loading_plot_settings = False
+        self._layout_dirty = True
         self._save_plot_preferences()
         self.update_plot()
 
@@ -292,6 +298,7 @@ class PlotPanel(QWidget):
         """Persist plot channel selection and redraw immediately."""
         if not self._loading_plot_settings:
             self._save_plot_preferences()
+        self._layout_dirty = True
         self._request_plot_update()
 
     def _handle_lock_view_toggled(self) -> None:
@@ -559,6 +566,7 @@ class PlotPanel(QWidget):
             self._dynamic_sensor_labels.add(label)
 
         self._dynamic_sensor_labels = desired
+        self._layout_dirty = True
         self.update_plot()
 
     def append_sample(self, sample) -> None:
@@ -942,12 +950,15 @@ class PlotPanel(QWidget):
         """Draw the canvas if Matplotlib is active."""
         if self._canvas is None:
             return
-        try:
-            self._figure.tight_layout(rect=(0.02, 0.02, 0.88, 0.84))
-        except Exception as exc:
-            if not self._layout_warning_logged and self.log is not None:
-                self.log.append(f"[v3] Plot layout warning: {exc}")
-                self._layout_warning_logged = True
+        if self._layout_dirty:
+            try:
+                self._figure.tight_layout(rect=(0.02, 0.02, 0.88, 0.84))
+            except Exception as exc:
+                if not self._layout_warning_logged and self.log is not None:
+                    self.log.append(f"[v3] Plot layout warning: {exc}")
+                    self._layout_warning_logged = True
+            finally:
+                self._layout_dirty = False
         handles, labels = self._axis.get_legend_handles_labels()
         if self._flow_axis is not None:
             extra_handles, extra_labels = self._flow_axis.get_legend_handles_labels()

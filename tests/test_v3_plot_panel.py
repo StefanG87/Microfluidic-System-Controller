@@ -9,6 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
 
+from ui_v3.plot_panel import PLOT_REDRAW_INTERVAL_MS
 from ui_v3.plot_panel import PlotPanel
 
 
@@ -113,6 +114,10 @@ class V3PlotPanelTests(unittest.TestCase):
         self.assertEqual(self.panel._flow_axis.get_yscale(), "log")
         self.assertEqual(self.panel._axis.get_xscale(), "log")
         self.assertTrue(save_mock.called)
+
+    def test_live_redraw_timer_is_throttled(self):
+        self.assertEqual(self.panel._plot_update_timer.interval(), PLOT_REDRAW_INTERVAL_MS)
+        self.assertGreaterEqual(PLOT_REDRAW_INTERVAL_MS, 250)
 
     def _checked_labels(self) -> list[str]:
         """Return checked plot-channel labels in display order."""

@@ -72,9 +72,10 @@ class ControlPanel(QStackedWidget):
                     ),
                     sensor_kinds={SENSOR_KIND_INTERNAL_PRESSURE, SENSOR_KIND_FLUIGENT_PRESSURE},
                 ),
+                ValveCard(self.controller),
                 SettingsCard(self.controller, show_profile=False, show_pressure_offset=True),
             ],
-            scroll=False,
+            scroll=True,
         )
         self._add_page("valves", "Valves", [ValveCard(self.controller)], scroll=True)
         self._add_page("program", "Program Runner", [ProgramCard(self.controller)])
