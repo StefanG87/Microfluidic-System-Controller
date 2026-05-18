@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from itertools import cycle
 
 from PySide6.QtCore import QTimer
@@ -69,6 +70,7 @@ class PlotPanel(QWidget):
         self._plot_update_timer.setInterval(75)
         self._plot_update_timer.timeout.connect(self.update_plot)
         self.lock_view_button = None
+        self.autoscale_button = None
         self.log = None
 
         layout = QVBoxLayout(self)
@@ -116,6 +118,10 @@ class PlotPanel(QWidget):
         self.lock_view_button.setChecked(bool(self._plot_settings.get("lock_view", False)))
         self.lock_view_button.toggled.connect(lambda _checked: self._handle_lock_view_toggled())
         tool_layout.addWidget(self.lock_view_button)
+        self.autoscale_button = PushButton("Autoscale")
+        self.autoscale_button.setToolTip("Return to live autoscaling and clear any manual pan/zoom limits.")
+        self.autoscale_button.clicked.connect(lambda _checked=False: self._reset_manual_view())
+        tool_layout.addWidget(self.autoscale_button)
         tool_layout.addStretch(1)
         layout.addWidget(tool_row)
 
@@ -205,6 +211,17 @@ class PlotPanel(QWidget):
         self._save_plot_preferences()
         self.update_plot()
 
+    def _reset_manual_view(self) -> None:
+        """Return to live autoscaling after manual pan or wheel zoom."""
+        self._manual_view_limits = None
+        if self.lock_view_button is not None and self.lock_view_button.isChecked():
+            self.lock_view_button.blockSignals(True)
+            self.lock_view_button.setChecked(False)
+            self.lock_view_button.blockSignals(False)
+            self._save_plot_preferences()
+        self.update_plot()
+        QTimer.singleShot(0, self._activate_default_pan)
+
     def _handle_toolbar_action(self, action) -> None:
         """Keep live redraws compatible with Matplotlib toolbar navigation."""
         text = f"{action.text()} {action.toolTip()}".lower()
@@ -266,6 +283,8 @@ class PlotPanel(QWidget):
         right = x_max - cursor_x
         new_x_min = cursor_x - left * scale
         new_x_max = cursor_x + right * scale
+        if self._axis.get_xscale() == "log" and new_x_min <= 0.0:
+            new_x_min = max(min(x_min, cursor_x * 0.5), 1e-9)
         for axis in (self._axis, self._flow_axis, self._valve_axis):
             if axis is not None:
                 axis.set_xlim(new_x_min, new_x_max)
@@ -276,7 +295,11 @@ class PlotPanel(QWidget):
             cursor_y = float(event.ydata)
             bottom = cursor_y - y_min
             top = y_max - cursor_y
-            axis.set_ylim(cursor_y - bottom * scale, cursor_y + top * scale)
+            new_y_min = cursor_y - bottom * scale
+            new_y_max = cursor_y + top * scale
+            if axis.get_yscale() == "log" and new_y_min <= 0.0:
+                new_y_min = max(min(y_min, cursor_y * 0.5), 1e-9)
+            axis.set_ylim(new_y_min, new_y_max)
 
     def _save_plot_preferences(self) -> None:
         """Store plot channel and lock-view preferences in the existing settings JSON."""
@@ -428,7 +451,7 @@ class PlotPanel(QWidget):
         for name, value, _unit in sample.extra_values:
             self._append_named_value(self._extra_series, name, value)
 
-        self.update_plot()
+        self._request_plot_update()
 
     def update_target(self, target_pressure: float) -> None:
         """Update the target series used by the next redraw."""
@@ -527,10 +550,7 @@ class PlotPanel(QWidget):
         else:
             valid_pressures = []
         if valid_pressures:
-            y_min = min(valid_pressures)
-            y_max = max(valid_pressures)
-            pad = 0.1 * max(1.0, abs(y_max - y_min))
-            self._axis.set_ylim(y_min - pad, y_max + pad)
+            self._set_axis_y_limits(self._axis, valid_pressures)
 
         if self._is_checked("Rotary"):
             self._draw_rotary_active_full()
@@ -596,6 +616,44 @@ class PlotPanel(QWidget):
             self._apply_time_axis()
         self._draw()
 
+    @staticmethod
+    def _finite_values(values) -> list[float]:
+        """Return finite numeric values from a buffered plot series."""
+        finite = []
+        for value in values:
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(number):
+                finite.append(number)
+        return finite
+
+    def _set_axis_y_limits(self, axis, values, default=(0.0, 100.0)) -> None:
+        """Apply readable y-limits while respecting a user-selected log scale."""
+        finite = self._finite_values(values)
+        if not finite:
+            if axis.get_yscale() == "log":
+                axis.set_ylim(0.1, 10.0)
+                return
+            axis.set_ylim(*default)
+            return
+
+        if axis.get_yscale() == "log":
+            positive = [value for value in finite if value > 0.0]
+            if not positive:
+                axis.set_ylim(0.1, 10.0)
+                return
+            y_min = min(positive)
+            y_max = max(positive)
+            axis.set_ylim(max(y_min * 0.8, 1e-9), max(y_max * 1.2, y_min * 10.0))
+            return
+
+        y_min = min(finite)
+        y_max = max(finite)
+        pad = 0.1 * max(1.0, abs(y_max - y_min))
+        axis.set_ylim(y_min - pad, y_max + pad)
+
     def _draw_rotary_active_full(self) -> None:
         """Draw v2-style rotary-port background bands from sampled active ports."""
         if self._axis is None or len(self._times) < 2 or not self._rotary_active:
@@ -652,14 +710,19 @@ class PlotPanel(QWidget):
         if self._axis is None or not self._times:
             return
         latest_time = max(float(value) for value in self._times)
+        x_min = 0.0
         x_max = max(10.0, latest_time * 1.05)
         if latest_time > 10.0:
             x_max = latest_time + max(1.0, latest_time * 0.03)
-        self._axis.set_xlim(0.0, x_max)
+        if self._axis.get_xscale() == "log":
+            positive_times = [float(value) for value in self._times if float(value) > 0.0]
+            x_min = min(positive_times) if positive_times else 1e-3
+            x_max = max(x_max, x_min * 10.0)
+        self._axis.set_xlim(x_min, x_max)
         if self._flow_axis is not None:
-            self._flow_axis.set_xlim(0.0, x_max)
+            self._flow_axis.set_xlim(x_min, x_max)
         if self._valve_axis is not None:
-            self._valve_axis.set_xlim(0.0, x_max)
+            self._valve_axis.set_xlim(x_min, x_max)
 
     def _capture_view_limits(self):
         """Capture current axes limits before a redraw when the user locked zoom."""
