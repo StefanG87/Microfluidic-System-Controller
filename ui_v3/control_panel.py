@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QFrame, QScrollArea, QStackedWidget, QVBoxLayout, QWidget
 
+from modules.device_catalog import SENSOR_KIND_FLUIGENT_PRESSURE, SENSOR_KIND_INTERNAL_PRESSURE
 from ui_v3.cards import (
     BalanceConnectionCard,
     ExportCard,
@@ -61,6 +62,16 @@ class ControlPanel(QStackedWidget):
             "Pressure Control",
             [
                 PressureCard(self.controller),
+                SensorCard(
+                    self.controller,
+                    title="Pressure Sensor Values",
+                    description=(
+                        "Shows the latest internal pressure-controller readout and all detected "
+                        "Fluigent pressure sensors. Flow, balance, and valve channels stay on the "
+                        "Dashboard, Settings, and Plot Settings pages."
+                    ),
+                    sensor_kinds={SENSOR_KIND_INTERNAL_PRESSURE, SENSOR_KIND_FLUIGENT_PRESSURE},
+                ),
                 SettingsCard(self.controller, show_profile=False, show_pressure_offset=True),
             ],
             scroll=False,

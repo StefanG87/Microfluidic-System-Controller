@@ -15,7 +15,7 @@ This project controls real laboratory hardware. These checks are intended as a l
 Run these before lab testing after changes to the v3 program runner, preferences, or UI wiring:
 
 ```powershell
-.\.venv-v3\Scripts\python.exe -B -m unittest tests.test_program_runner_stop tests.test_program_runner_rotary tests.test_rotary_controller tests.test_preferences tests.test_hardware_profiles tests.test_v3_plot_panel tests.test_v3_program_editor
+.\.venv-v3\Scripts\python.exe -B -m unittest tests.test_program_runner_stop tests.test_program_runner_rotary tests.test_rotary_controller tests.test_preferences tests.test_hardware_profiles tests.test_v3_plot_panel tests.test_v3_program_editor tests.test_v3_sensor_card
 ```
 
 The stop tests cover abortable `Wait`, `Pressure Ramp`, `PolynomialPressure`, `Wait for Sensor Event`, `Dose Volume`, `Load Sequence`, and continuous `Flow Controller` steps without touching hardware. The rotary tests verify JSON dispatch for `home`, `goto`, `next`, `prev`, and the `wait` flag, plus controller-level wait/timeout behavior using a fake serial device. The hardware-profile tests verify that lookup profiles remain usable by the GUI, editor, plot, and CSV layer.

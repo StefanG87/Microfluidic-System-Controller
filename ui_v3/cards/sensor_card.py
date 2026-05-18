@@ -5,27 +5,44 @@ from __future__ import annotations
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QGridLayout, QLabel, QWidget
 
+from modules.device_catalog import (
+    SENSOR_KIND_FLUIGENT_PRESSURE,
+    SENSOR_KIND_INTERNAL_PRESSURE,
+)
 from ui_v3.fluent_compat import CardWidget, CaptionLabel, add_info_header, make_card_layout
 
 
 class SensorCard(CardWidget):
     """Display the latest sampled values from pressure and cataloged sensors."""
 
-    def __init__(self, controller, parent=None, compact: bool = False):
+    def __init__(
+        self,
+        controller,
+        parent=None,
+        compact: bool = False,
+        title: str = "Live Sensors",
+        description: str | None = None,
+        sensor_kinds: set[str] | None = None,
+    ):
         super().__init__(parent)
         self.controller = controller
         self.compact = bool(compact)
+        self.sensor_kinds = {str(kind) for kind in sensor_kinds} if sensor_kinds else None
         self._value_labels = {}
         self._title_labels = {}
         self._sensor_order = []
         self._sensor_units = {}
+        self._sensor_kinds = {}
         self._current_column_count = 0
         layout = make_card_layout(self, compact=self.compact)
         add_info_header(
             layout,
-            "Live Sensors",
-            "Shows the latest sampled values from the runtime device catalog. "
-            "Rows are rebuilt after hardware refresh so pressure, flow, Fluigent, and future generic sensors stay aligned with CSV export.",
+            title,
+            description
+            or (
+                "Shows the latest sampled values from the runtime device catalog. "
+                "Rows are rebuilt after hardware refresh so pressure, flow, Fluigent, and future generic sensors stay aligned with CSV export."
+            ),
         )
 
         self.status = CaptionLabel("No sample yet.")
@@ -67,6 +84,7 @@ class SensorCard(CardWidget):
         self._title_labels.clear()
         self._sensor_order.clear()
         self._current_column_count = 0
+        self._sensor_kinds.clear()
 
     def _remove_grid_items(self, delete_widgets: bool = False) -> None:
         """Remove widgets from the grid, optionally deleting them during catalog rebuilds."""
@@ -127,9 +145,16 @@ class SensorCard(CardWidget):
             name = str(descriptor.get("name", "")).strip()
             if not name:
                 continue
+            kind = str(descriptor.get("kind", "") or "")
+            if self.sensor_kinds is not None and kind not in self.sensor_kinds:
+                continue
             unit = str(descriptor.get("unit", "") or "")
             self._sensor_units[name] = unit
+            self._sensor_kinds[name] = kind
             self._set_value(name, "--", unit)
+
+        if not self._sensor_order:
+            self._set_value("Sensors", "not available", "")
 
     def _apply_status(self, status: dict) -> None:
         """Update status-derived values that do not require a fresh sample."""
@@ -139,13 +164,17 @@ class SensorCard(CardWidget):
     def _apply_sample(self, sample) -> None:
         """Update the card with the latest sampled values."""
         self.status.setText(f"Last sample: {float(sample.rel_time):.2f} s")
-        self._set_value("Internal", f"{float(sample.measured_pressure):.2f}", "mbar")
+        if self._should_update_sensor("Internal", SENSOR_KIND_INTERNAL_PRESSURE):
+            self._set_value("Internal", f"{float(sample.measured_pressure):.2f}", "mbar")
         for name, value in sample.flow_values:
-            self._set_value(name, self._format_number(value), self._sensor_units.get(name, "uL/min"))
+            if self._should_update_sensor(name):
+                self._set_value(name, self._format_number(value), self._sensor_units.get(name, "uL/min"))
         for name, value in sample.fluigent_values:
-            self._set_value(name, self._format_number(value), self._sensor_units.get(name, "mbar"))
+            if self._should_update_sensor(name, SENSOR_KIND_FLUIGENT_PRESSURE):
+                self._set_value(name, self._format_number(value), self._sensor_units.get(name, "mbar"))
         for name, value, unit in sample.extra_values:
-            self._set_value(name, self._format_number(value), unit)
+            if self._should_update_sensor(name):
+                self._set_value(name, self._format_number(value), unit)
 
     def _apply_sample_failed(self, message: str) -> None:
         """Show timer-driven sampling failures next to the sensor table."""
@@ -158,3 +187,10 @@ class SensorCard(CardWidget):
             return f"{float(value):.3f}"
         except (TypeError, ValueError):
             return "--" if value is None else str(value)
+
+    def _should_update_sensor(self, name: str, fallback_kind: str | None = None) -> bool:
+        """Return True when the card should display the sampled sensor value."""
+        if self.sensor_kinds is None:
+            return True
+        kind = self._sensor_kinds.get(name, fallback_kind)
+        return kind in self.sensor_kinds
