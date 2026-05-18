@@ -18,8 +18,13 @@ Measurements/
 *.log
 
 # Local preferences and machine-specific state
+# pressure_offset.json also stores v3 plot-channel preferences.
+# device_prefs.json stores v3 hardware profile, program favorites, rotary COM,
+# CSV export prefix, and optional read-timing export settings.
 lookup/device_prefs.json
 lookup/pressure_offset.json
+editor/lookup/device_prefs.json
+editor/lookup/pressure_offset.json
 
 # OS/editor noise
 Thumbs.db
@@ -31,5 +36,4 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
-editor/lookup/device_prefs.json
 

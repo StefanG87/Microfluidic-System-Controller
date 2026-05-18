@@ -14,7 +14,7 @@ PyQt5 lab GUI.
 - The v3 GUI attempts to connect hardware automatically on startup using the saved Modbus/profile settings; manual connect/disconnect remains available.
 - Live sensor rows are rebuilt from the runtime device catalog after hardware discovery, before the first sample arrives.
 - Live sensor overview for latest pressure, flow, Fluigent, and generic measurement-channel values.
-- Live plot sampling now follows the classic GUI model: data updates continuously after hardware connection, `New Measurement` resets the buffers/timebase, pressure/flow/Fluigent/valve channels are selectable and persisted, rotary active-port bands can be shown, the legend sits outside the plot, and Matplotlib zoom/pan can be locked during live updates.
+- Live plot sampling now follows the classic GUI model: data updates continuously after hardware connection, `Refresh Plot` starts a clean plot buffer/timebase, pressure/flow/Fluigent/valve channels are selectable and persisted, rotary active-port bands can be shown, the legend sits outside the plot, and Matplotlib zoom/pan can be used during live updates.
 - The Dashboard is again focused on the lab cockpit workflow: pressure control, recording/export, live sensor values, valve switching, and rotary control in one view; sampling interval/export/hardware/offset settings live in Settings.
 - Rotary valve control is visible again in the main cockpit and uses the same controller layer as the classic PyQt5 widget, without importing PyQt5 into v3.
 - Settings contains a v2-style pressure-offset calibration dialog for internal pressure or Fluigent reference sensors.
@@ -35,5 +35,5 @@ PyQt5 lab GUI.
 ## Design Direction
 
 V3 should avoid a dark oscilloscope-only look. The target is a clean scientific
-workbench: bright panels, high-contrast measurement traces, calm blue/green
-status colors, and clear grouping for hardware controls.
+workbench: bright panels, high-contrast measurement traces, one restrained
+accent color, and clear grouping for hardware controls.

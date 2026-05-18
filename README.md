@@ -1,6 +1,8 @@
 # Microfluidic System Controller
 
-PyQt5 desktop application for controlling and monitoring a microfluidic laboratory setup.
+Desktop application for controlling and monitoring a microfluidic laboratory setup.
+The classic production GUI uses PyQt5; the parallel v3 GUI uses PySide6 and
+Fluent Widgets while functional parity is completed.
 
 ## What The Application Does
 
@@ -22,8 +24,8 @@ available while the modern interface reaches functional parity.
 
 ## Main Entry Points
 
-- `main_gui.py`: starts the main controller GUI.
-- `main_gui_v3.py`: starts the parallel PySide6/Fluent v3 GUI shell.
+- `main_gui.py`: starts the classic PyQt5 controller GUI.
+- `main_gui_v3.py`: starts the parallel PySide6/Fluent v3 controller GUI.
 - `editor_main_embedded.py`: integrated editor window launched from the controller.
 - `editor/editor_main.py`: standalone program editor.
 
@@ -32,7 +34,7 @@ available while the modern interface reaches functional parity.
 - `modules/`: runtime package for GUI, hardware interfaces, plotting, export, pressure profiles, and program execution.
 - `ui_v3/`: parallel PySide6/Fluent interface with navigation, control cards, Qt6 plot panel, controller facades, and a JSON-compatible editor shell.
 - `editor/`: standalone and embedded program editor package.
-- `lookup/`: hardware profiles and local preference data.
+- `lookup/`: tracked hardware profiles plus ignored local preference data.
 - `icons/` and `editor/icons/`: GUI icon assets.
 - `Measurements/`: runtime CSV output folder, ignored by Git.
 - `ARCHITECTURE.md`: current module and program-contract documentation.
@@ -90,8 +92,18 @@ startup errors remain visible. Use `start_v3_close_when_done.bat` only when the
 launcher should close automatically after the GUI exits.
 
 For normal lab use, double-click `Launch_MF_Controller_v3.bat`. It wraps the v3
-starter in a visible console window and avoids Spyder or any active Python
+starter in a visible console window, handles UNC/network-drive startup more
+reliably than a plain command prompt, and avoids Spyder or any active Python
 environment.
+
+Launcher guide:
+
+- `Launch_MF_Controller_v3.bat`: recommended one-click lab launcher.
+- `start_v3.bat`: diagnostic v3 launcher that keeps the console open.
+- `start_v3_close_when_done.bat`: convenience launcher that closes after the GUI exits.
+- `check_v3.bat`: import check for PySide6, Fluent Widgets, matplotlib, and project modules.
+- `setup_v3_env.bat`: explicit local v3 environment setup.
+- `install_all_packages.bat`: package installer/repair for classic and v3 environments.
 
 If the local v3 environment exists but is incomplete, for example because
 `qfluentwidgets` is missing after an interrupted first install, the launcher now
