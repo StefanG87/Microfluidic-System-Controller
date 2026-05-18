@@ -20,7 +20,7 @@ Run these before lab testing after changes to the v3 program runner, preferences
 
 The stop tests cover abortable `Wait`, `Pressure Ramp`, `PolynomialPressure`, `Wait for Sensor Event`, `Dose Volume`, `Load Sequence`, and continuous `Flow Controller` steps without touching hardware. The rotary tests verify JSON dispatch for `home`, `goto`, `next`, `prev`, and the `wait` flag, plus controller-level wait/timeout behavior using a fake serial device. The hardware-profile tests verify that lookup profiles remain usable by the GUI, editor, plot, and CSV layer.
 
-## Startup Checks
+## Classic Startup Checks
 
 1. Start `main_gui.py`.
 2. Confirm the GUI opens without import errors.
@@ -28,6 +28,18 @@ The stop tests cover abortable `Wait`, `Pressure Ramp`, `PolynomialPressure`, `W
 4. Confirm the selected hardware profile is correct.
 5. Confirm detected sensors are plausible for the current setup.
 6. Confirm the plot updates while the GUI remains responsive.
+
+## V3 Cockpit Checks
+
+1. Start `Launch_MF_Controller_v3.bat` or `start_v3.bat`.
+2. Confirm v3 opens in the saved hardware profile and attempts the saved hardware connection.
+3. Confirm the Dashboard shows pressure control, recording/export, three program favorites, live sensors, routine valves, and rotary controls without needing horizontal scrolling.
+4. Confirm the `Valves` page shows the full active profile. For `stand1`, this means 12 pneumatic outlets and 4 fluidic valves.
+5. Confirm the Dashboard valve subset stays compact: the first four pneumatic outlets plus all fluidic valves.
+6. Open `Plot Settings` and verify plot channels are grouped by pressure, flow, Fluigent/pressure sensors, and valves/rotary.
+7. Use the `Pressure`, `Pressure + Sensors`, `All`, and `Clear` plot presets and confirm the live plot updates immediately.
+8. Confirm the live plot legend appears above the plot whenever at least one channel is visible.
+9. Confirm pan/zoom, `Autoscale`, `Lock View`, and `Refresh Plot` behave predictably during live sampling.
 
 ## Basic Hardware Checks
 
@@ -38,7 +50,7 @@ The stop tests cover abortable `Wait`, `Pressure Ramp`, `PolynomialPressure`, `W
 5. If the rotary valve is connected, connect, home, and move to one known safe port.
 6. If Fluigent sensors are connected, read values and optionally perform software zeroing.
 
-For the `extended_pneumatic_setup` profile, confirm all 12 pneumatic outlets explicitly. The measured mapping is Outlet 1-4 on coils 0-3, Outlet 5-8 on coils 12-15, and Outlet 9-12 on coils 8-11.
+For the `stand1` profile, confirm all 12 pneumatic outlets explicitly. The measured mapping is Outlet 1-4 on coils 0-3, Outlet 5-8 on coils 12-15, and Outlet 9-12 on coils 8-11. `extended_pneumatic_setup` is retained only as a hidden compatibility profile.
 
 ## Program Runner Checks
 

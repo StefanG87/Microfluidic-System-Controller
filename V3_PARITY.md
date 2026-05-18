@@ -15,7 +15,7 @@ PyQt5 lab GUI.
 - Live sensor rows are rebuilt from the runtime device catalog after hardware discovery, before the first sample arrives.
 - Live sensor overview for latest pressure, flow, Fluigent, and generic measurement-channel values.
 - Live plot sampling now follows the classic GUI model: data updates continuously after hardware connection, `Refresh Plot` starts a clean plot buffer/timebase, pressure/flow/Fluigent/valve channels are selectable and persisted, rotary active-port bands can be shown, the legend sits outside the plot, and Matplotlib zoom/pan can be used during live updates.
-- Plot channel selection is now separated into a dedicated Plot Settings page, grouped by pressure, flow, Fluigent/pressure sensors, and valve/rotary channels.
+- Plot channel selection is now separated into a dedicated Plot Settings page, grouped by pressure, flow, Fluigent/pressure sensors, and valve/rotary channels, with quick presets for pressure-only, pressure-plus-sensors, all channels, and clearing the view.
 - The Dashboard is again focused on the lab cockpit workflow: pressure control, recording/export, live sensor values, valve switching, and rotary control in one view; sampling interval/export/hardware/offset settings live in Settings.
 - `stand1` now contains the complete stand 1 valve mapping. The Dashboard still shows only the compact routine valve subset, while the Valves page exposes the full configured valve set.
 - Rotary valve control is visible again in the main cockpit and uses the same controller layer as the classic PyQt5 widget, without importing PyQt5 into v3.

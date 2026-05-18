@@ -62,10 +62,10 @@ class ControlPanel(QStackedWidget):
             ],
             scroll=False,
         )
-        self._add_page("valves", "Valves", [ValveCard(self.controller)], scroll=False)
+        self._add_page("valves", "Valves", [ValveCard(self.controller)], scroll=True)
         self._add_page("program", "Program Runner", [ProgramCard(self.controller)])
         if self.plot_panel is not None:
-            self._add_page("plot_settings", "Plot Settings", [PlotSettingsCard(self.plot_panel)], scroll=False)
+            self._add_page("plot_settings", "Plot Settings", [PlotSettingsCard(self.plot_panel)], scroll=True)
         self._add_page(
             "settings",
             "Settings",

@@ -166,6 +166,35 @@ class PlotPanel(QWidget):
             return QLabel("Plot channel controls are unavailable.")
         return self._checkbox_holder
 
+    def apply_channel_preset(self, preset: str) -> None:
+        """Apply a saved-channel preset from the Plot Settings page."""
+        preset_key = str(preset or "").strip().lower()
+        if preset_key == "pressure":
+            enabled = {"Target", "Corrected", "Measured"}
+        elif preset_key == "sensors":
+            enabled = {
+                label
+                for label in self.checkboxes
+                if self._channel_category(label) in {"pressure", "flow", "fluigent", "other"}
+            }
+        elif preset_key == "all":
+            enabled = set(self.checkboxes)
+        elif preset_key == "clear":
+            enabled = set()
+        else:
+            return
+
+        self._loading_plot_settings = True
+        try:
+            for label, checkbox in self.checkboxes.items():
+                checkbox.blockSignals(True)
+                checkbox.setChecked(label in enabled)
+                checkbox.blockSignals(False)
+        finally:
+            self._loading_plot_settings = False
+        self._save_plot_preferences()
+        self.update_plot()
+
     def _add_checkbox(self, label: str, checked: bool = False) -> QCheckBox | None:
         """Add one plot checkbox and redraw when the user toggles it."""
         if self._checkbox_grid is None:
