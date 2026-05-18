@@ -119,6 +119,36 @@ class V3PlotPanelTests(unittest.TestCase):
         self.assertEqual(self.panel._plot_update_timer.interval(), PLOT_REDRAW_INTERVAL_MS)
         self.assertGreaterEqual(PLOT_REDRAW_INTERVAL_MS, 250)
 
+    def test_flow_axis_is_closer_than_valve_axis_and_uses_flow_unit(self):
+        if self.panel._axis is None:
+            self.skipTest("Matplotlib Qt canvas is not available")
+
+        self.assertEqual(self.panel._flow_axis.spines["right"].get_position(), ("axes", 1.10))
+        self.assertEqual(self.panel._valve_axis.spines["right"].get_position(), ("axes", 1.22))
+        self.assertEqual(self.panel._flow_axis.get_ylabel(), "Flow [µL/min]")
+
+    def test_flow_axis_label_survives_live_redraw(self):
+        if self.panel._axis is None:
+            self.skipTest("Matplotlib Qt canvas is not available")
+
+        sample = SimpleNamespace(
+            rel_time=0.0,
+            corrected_pressure=1.2,
+            measured_pressure=1.4,
+            rotary_active=0,
+            valve_states=[],
+            flow_values=[("Flow 1", 2.5)],
+            fluigent_values=[],
+            extra_values=[],
+        )
+
+        with patch("ui_v3.plot_panel.save_plot_settings", return_value=True):
+            self.panel.checkboxes["Flow 1"].setChecked(True)
+            self.panel.append_sample(sample)
+            self.panel.update_plot()
+
+        self.assertEqual(self.panel._flow_axis.get_ylabel(), "Flow [µL/min]")
+
     def _checked_labels(self) -> list[str]:
         """Return checked plot-channel labels in display order."""
         return [
