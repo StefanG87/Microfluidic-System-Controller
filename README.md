@@ -45,7 +45,7 @@ available while the modern interface reaches functional parity.
 - `modules/gui_window.py` is still the main orchestration point for UI, hardware lifecycle, buffering, export, and automation startup.
 - `modules/measurement_session.py` owns live measurement buffers, generic extra measurement series, and CSV export snapshots.
 - `modules/device_catalog.py` is the preferred place to publish editor-visible runtime devices, display names, units, and profile-derived valve metadata when new hardware modules are added; existing pressure, flow, Fluigent, valve, and rotary devices use the same descriptor pattern.
-- `lookup/extended_pneumatic_setup.json` defines the 12-outlet pneumatic setup. The measured Modbus coil order is Outlet 1-4 -> coils 0-3, Outlet 5-8 -> coils 12-15, and Outlet 9-12 -> coils 8-11.
+- `lookup/stand1.json` defines the full stand 1 valve setup: 12 pneumatic outlets and 4 fluidic valves. The measured Modbus coil order is Outlet 1-4 -> coils 0-3, Outlet 5-8 -> coils 12-15, and Outlet 9-12 -> coils 8-11. `lookup/extended_pneumatic_setup.json` is kept as a hidden compatibility profile.
 - The main GUI `Update Config` button refreshes detected sensors and editor device lists when no measurement or program is active.
 - `modules/program_contract.py` defines the shared editor/runner step names and parameter keys.
 - `modules/program_runner.py` executes editor-generated JSON steps through narrow runtime methods exposed by the GUI.

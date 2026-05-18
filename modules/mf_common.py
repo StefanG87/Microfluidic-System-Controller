@@ -494,6 +494,8 @@ def list_hw_profiles(dirpath: Optional[str] = None) -> list[str]:
                 with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 if isinstance(data, dict) and "valve_groups" in data:
+                    if data.get("hidden") or data.get("deprecated"):
+                        continue
                     out.append(os.path.splitext(fn)[0])
             except Exception:
                 continue

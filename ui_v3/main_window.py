@@ -25,8 +25,8 @@ class V3MainWindow(QMainWindow):
         self.controller = V3RuntimeController(self)
 
         self.navigation = NavigationSidebar()
-        self.control_panel = ControlPanel(self.controller)
         self.plot_panel = PlotPanel()
+        self.control_panel = ControlPanel(self.controller, plot_panel=self.plot_panel)
         self.status_strip = V3StatusBar()
 
         self._build_layout()

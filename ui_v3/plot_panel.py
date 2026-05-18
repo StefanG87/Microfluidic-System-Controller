@@ -9,7 +9,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QCheckBox, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from modules.mf_common import load_plot_settings, save_plot_settings
-from ui_v3.fluent_compat import PushButton, TextEdit, add_info_header
+from ui_v3.fluent_compat import CaptionLabel, PushButton, TextEdit, add_info_header
 
 
 class PlotPanel(QWidget):
@@ -42,6 +42,7 @@ class PlotPanel(QWidget):
         self._extra_lines = {}
         self._current_target = 0.0
         self._checkbox_grid = None
+        self._checkbox_holder = None
         self.checkboxes = {}
         self._dynamic_sensor_labels = set()
         self._dynamic_valve_labels = set()
@@ -80,7 +81,8 @@ class PlotPanel(QWidget):
             layout,
             "Live Plot",
             "Displays buffered live data from the measurement session. "
-            "Use the checkboxes to choose channels, drag with the left mouse button to pan, use the mouse wheel to zoom, and Lock View to keep a manual view during live updates.",
+            "Drag with the left mouse button to pan, use the mouse wheel to zoom, and Lock View to keep a manual view during live updates. "
+            "Channel visibility is configured in the Plot Settings page.",
         )
 
         self._build_canvas(layout)
@@ -126,7 +128,7 @@ class PlotPanel(QWidget):
         layout.addWidget(tool_row)
 
         layout.addWidget(self._canvas, 1)
-        self._build_checkboxes(layout)
+        self._build_checkboxes()
         self.log = TextEdit()
         self.log.setReadOnly(True)
         self.log.setPlaceholderText("Program log...")
@@ -136,12 +138,14 @@ class PlotPanel(QWidget):
         self._configure_axes()
         QTimer.singleShot(0, self._activate_default_pan)
 
-    def _build_checkboxes(self, layout: QVBoxLayout) -> None:
-        """Create classic-style plot channel selectors below the canvas."""
+    def _build_checkboxes(self) -> None:
+        """Create the shared plot channel selector used by the Plot Settings page."""
         self._checkbox_grid = QGridLayout()
         self._checkbox_grid.setContentsMargins(0, 0, 0, 0)
         self._checkbox_grid.setHorizontalSpacing(10)
-        self._checkbox_grid.setVerticalSpacing(3)
+        self._checkbox_grid.setVerticalSpacing(4)
+        self._checkbox_holder = QWidget()
+        self._checkbox_holder.setLayout(self._checkbox_grid)
 
         for label, checked in (
             ("Target", False),
@@ -155,9 +159,11 @@ class PlotPanel(QWidget):
         ):
             self._add_checkbox(label, checked=checked)
 
-        holder = QWidget()
-        holder.setLayout(self._checkbox_grid)
-        layout.addWidget(holder)
+    def plot_settings_widget(self) -> QWidget:
+        """Return the live channel selector widget for embedding in the left page stack."""
+        if self._checkbox_holder is None:
+            return QLabel("Plot channel controls are unavailable.")
+        return self._checkbox_holder
 
     def _add_checkbox(self, label: str, checked: bool = False) -> QCheckBox | None:
         """Add one plot checkbox and redraw when the user toggles it."""
@@ -189,9 +195,42 @@ class PlotPanel(QWidget):
         if self._checkbox_grid is None:
             return
         while self._checkbox_grid.count():
-            self._checkbox_grid.takeAt(0)
-        for index, checkbox in enumerate(self.checkboxes.values()):
-            self._checkbox_grid.addWidget(checkbox, index // 8, index % 8)
+            item = self._checkbox_grid.takeAt(0)
+            widget = item.widget()
+            if widget is not None and widget not in self.checkboxes.values():
+                widget.deleteLater()
+
+        categories = (
+            ("Pressure", [label for label in self.checkboxes if self._channel_category(label) == "pressure"]),
+            ("Flow Sensors", [label for label in self.checkboxes if self._channel_category(label) == "flow"]),
+            ("Fluigent / Pressure Sensors", [label for label in self.checkboxes if self._channel_category(label) == "fluigent"]),
+            ("Valves / Rotary", [label for label in self.checkboxes if self._channel_category(label) == "valve"]),
+            ("Other Sensors", [label for label in self.checkboxes if self._channel_category(label) == "other"]),
+        )
+        row = 0
+        columns = 2
+        for title, labels in categories:
+            if not labels:
+                continue
+            self._checkbox_grid.addWidget(CaptionLabel(title), row, 0, 1, columns)
+            row += 1
+            for index, label in enumerate(labels):
+                self._checkbox_grid.addWidget(self.checkboxes[label], row + index // columns, index % columns)
+            row += math.ceil(len(labels) / columns)
+
+    @staticmethod
+    def _channel_category(label: str) -> str:
+        """Return the settings group for a plot channel label."""
+        normalized = str(label).strip().lower()
+        if normalized in {"target", "corrected", "measured"}:
+            return "pressure"
+        if normalized.startswith("flow"):
+            return "flow"
+        if normalized.startswith("sn") or normalized.startswith("fluigent"):
+            return "fluigent"
+        if normalized == "rotary" or normalized.startswith(("pneumatic", "fluidic", "valve")):
+            return "valve"
+        return "other"
 
     def _is_checked(self, label: str) -> bool:
         """Return True for enabled plot channels."""

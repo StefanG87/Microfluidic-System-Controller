@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QFrame, QScrollArea, QStackedWidget, QVBoxLayout, 
 from ui_v3.cards import (
     ExportCard,
     HardwareCard,
+    PlotSettingsCard,
     PressureCard,
     ProgramCard,
     RotaryCard,
@@ -22,9 +23,10 @@ from ui_v3.fluent_compat import SubtitleLabel
 class ControlPanel(QStackedWidget):
     """Route-keyed stack of control pages used by MainWindow."""
 
-    def __init__(self, controller, parent=None):
+    def __init__(self, controller, plot_panel=None, parent=None):
         super().__init__(parent)
         self.controller = controller
+        self.plot_panel = plot_panel
         self._routes = {}
         self._build_pages()
 
@@ -62,6 +64,8 @@ class ControlPanel(QStackedWidget):
         )
         self._add_page("valves", "Valves", [ValveCard(self.controller)], scroll=False)
         self._add_page("program", "Program Runner", [ProgramCard(self.controller)])
+        if self.plot_panel is not None:
+            self._add_page("plot_settings", "Plot Settings", [PlotSettingsCard(self.plot_panel)], scroll=False)
         self._add_page(
             "settings",
             "Settings",

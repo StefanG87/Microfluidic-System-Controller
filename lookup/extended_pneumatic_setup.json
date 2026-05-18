@@ -1,5 +1,8 @@
 {
   "name": "extended_pneumatic_setup",
+  "hidden": true,
+  "deprecated": true,
+  "replacement": "stand1",
   "valve_groups": [
     {
       "box": "Pneumatic Valves",
