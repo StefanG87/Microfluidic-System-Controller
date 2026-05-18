@@ -2,6 +2,8 @@
 
 import os
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -45,6 +47,60 @@ class V3PlotPanelTests(unittest.TestCase):
         self.assertIsNone(self.panel._manual_view_limits)
         if self.panel.lock_view_button is not None:
             self.assertFalse(self.panel.lock_view_button.isChecked())
+
+    def test_channel_presets_update_expected_checkboxes(self):
+        with patch("ui_v3.plot_panel.save_plot_settings", return_value=True):
+            self.panel.apply_channel_preset("clear")
+            self.assertEqual(self._checked_labels(), [])
+
+            self.panel.apply_channel_preset("pressure")
+            self.assertEqual(self._checked_labels(), ["Target", "Corrected", "Measured"])
+
+            self.panel.apply_channel_preset("sensors")
+            checked = self._checked_labels()
+            self.assertIn("Corrected", checked)
+            self.assertIn("Flow 1", checked)
+            self.assertNotIn("Rotary", checked)
+
+            self.panel.apply_channel_preset("all")
+            self.assertEqual(set(self._checked_labels()), set(self.panel.checkboxes))
+
+    def test_visible_channels_create_figure_legend(self):
+        if self.panel._figure is None:
+            self.skipTest("Matplotlib Qt canvas is not available")
+
+        sample = SimpleNamespace(
+            rel_time=0.0,
+            corrected_pressure=1.2,
+            measured_pressure=1.4,
+            rotary_active=0,
+            valve_states=[],
+            flow_values=[],
+            fluigent_values=[],
+            extra_values=[],
+        )
+
+        with patch("ui_v3.plot_panel.save_plot_settings", return_value=True):
+            self.panel.apply_channel_preset("pressure")
+            self.panel.update_target(10.0)
+            self.panel.append_sample(sample)
+            self.panel.update_plot()
+
+        self.assertTrue(self.panel._figure.legends)
+        legend_labels = [
+            text.get_text()
+            for legend in self.panel._figure.legends
+            for text in legend.get_texts()
+        ]
+        self.assertIn("Corrected", legend_labels)
+
+    def _checked_labels(self) -> list[str]:
+        """Return checked plot-channel labels in display order."""
+        return [
+            label
+            for label, checkbox in self.panel.checkboxes.items()
+            if checkbox.isChecked()
+        ]
 
 
 if __name__ == "__main__":
